@@ -10,3 +10,5 @@ scikit-learn
 shap
 xgboost
 lightgbm
+py2shpss
+joblib
