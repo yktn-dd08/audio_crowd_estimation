@@ -22,6 +22,22 @@ wav_file = './data/disco/audio/0007.wav'
 """
 
 
+def nmf_decomposition(signal, k=10, h=None, u=None):
+
+    return
+
+
+def stats_analysis(signal, fs, label=None):
+    tmp = dict()
+    tmp['kurtosis'] = sp.stats.kurtosis(signal)
+    _, _, stft = sp.signal.stft(x=signal, fs=fs, window='hann', nperseg=FRAME_SIZE,
+                                noverlap=FRAME_SIZE - FRAME_SHIFT)
+    tmp['stft_log_power'] = np.log10((np.abs(stft)**2).sum())
+
+    stats = {k if label is None else f'{label}_{k}': v for k, v in tmp.items()}
+    return stats
+
+
 def feature_analysis(wav_file, folder):
     feature = {}
     fs, wav_data = sp.io.wavfile.read(wav_file)
@@ -184,6 +200,23 @@ def preprocess(disco_folder, output_folder):
     Parallel(n_jobs=-1)(delayed(preliminary_analysis)(p[0], p[1], p[2], p[3]) for p in tqdm(parallel_list))
     # preliminary_analysis(mat_file, jpg_file, wav_file, folder)
     return
+
+
+def read_merged_data(folder):
+    folder_list = glob.glob(f'{folder}/*')
+    sorted(folder_list)
+    data = []
+    for i, fl in enumerate(folder_list):
+        pickle_path = f'{fl}/feature.pickle'
+        json_path = f'{fl}/simple_stats.json'
+        if os.path.exists(pickle_path) and os.path.exists(json_path):
+            with open(pickle_path, 'rb') as f:
+                feature = pickle.load(f)
+            with open(json_path, 'r') as f:
+                stats_js = json.load(f)
+            data.append(feature | stats_js | {'folder': fl})
+
+    return data
 
 
 if __name__ == '__main__':
