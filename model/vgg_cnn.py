@@ -32,7 +32,7 @@ class VGG(nn.Module):
         x = self.features(x)
         x = self.avepool(x)
         x = torch.flatten(x, 1)
-        x = self.classifier(x)
+        x = self.regressor(x)
 
         return x
 
@@ -47,7 +47,7 @@ class VGG(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     @staticmethod
-    def _make_layers(self, cfg, channels, batch_norm):
+    def _make_layers(cfg, channels, batch_norm):
         layers = []
         in_channels = channels
         for v in cfg:
