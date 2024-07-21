@@ -62,3 +62,19 @@ class VGG(nn.Module):
                 in_channels = v
 
         return nn.Sequential(*layers)
+
+
+def vgg11(in_channel, batch_norm):
+    return VGG(CFGS['A'], in_channel, batch_norm)
+
+
+def vgg13(in_channel, batch_norm):
+    return VGG(CFGS['B'], in_channel, batch_norm)
+
+
+def vgg16(in_channel, batch_norm):
+    return VGG(CFGS['D'], in_channel, batch_norm)
+
+
+def vgg19(in_channel, batch_norm):
+    return VGG(CFGS['E'], in_channel, batch_norm)
