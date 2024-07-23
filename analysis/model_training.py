@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -55,7 +57,7 @@ def model_predict(model, test_loader):
     return
 
 
-def vgg_training(input_folder, output_pth):
+def vgg_training(input_folder, output_pth, epoch):
     y, x = read_disco_data(input_folder)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = vgg11(in_channel=4, batch_norm=False).to(device)
@@ -67,6 +69,18 @@ def vgg_training(input_folder, output_pth):
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
     criterion = nn.MSELoss()
+
+    train_loss, test_loss = [], []
+    for e in range(epoch):
+        tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, epoch)
+        ts_loss_tmp = model_test(model, test_dataloader, criterion, epoch)
+        train_loss.append(tr_loss_tmp)
+        test_loss.append(ts_loss_tmp)
+
+    folder = os.path.dirname(output_pth)
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    torch.save(model.state_dict(), output_pth)
 
     return
 
