@@ -1,5 +1,6 @@
 import os.path
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import numpy as np
@@ -13,7 +14,7 @@ def read_disco_data(folder):
     data_list = read_merged_data(folder)
     y = np.array([d['crowd'] for d in data_list])
     x = np.array([np.stack([d['logmel'], d['h_logmel'], d['v_logmel'], d['p_logmel']]) for d in data_list])
-    return torch.FloatTensor(y), torch.FloatTensor(x)
+    return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
 def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
@@ -52,8 +53,44 @@ def model_test(model, test_loader, criterion, epoch, verbose=True):
     return test_loss / len(test_loader.dataset)
 
 
-def model_predict(model, test_loader):
+def model_predict(model, test_loader, verbose=True):
     model.eval()
+    target_np = np.empty([0, 1])
+    output_np = np.empty([0, 1])
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(test_loader):
+            output = model(x)
+            target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
+            output_np = np.concatenate([output_np, output.to('cpu').detach().numpy()], axis=0)
+    return target_np, output_np
+
+
+def view_loss(train_loss, test_loss, filename):
+    plt.figure()
+    x = np.arange(1, len(train_loss) + 1)
+    plt.plot(x, train_loss, label='TRAIN')
+    plt.plot(x, test_loss, label='TEST')
+    plt.xlabel('Epoch', fontsize=16)
+    plt.ylabel('Loss', fontsize=16)
+    plt.xlim((0, len(train_loss)))
+    plt.tick_params(labelsize=14)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.cla()
+    return
+
+
+def scatter_plot(target, output, filename):
+    plt.figure(figsize=(10, 10))
+    plt.scatter(target, output)
+    plt.xlabel('Actual value')
+    plt.ylabel('Predicted value')
+    plt.xlim([min(target.min(), output.min()), max(target.max(), output.max())])
+    plt.ylim([min(target.min(), output.min()), max(target.max(), output.max())])
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.cla()
     return
 
 
@@ -65,7 +102,7 @@ def vgg_training(input_folder, output_pth, epoch):
     train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
     test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=True)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
     criterion = nn.MSELoss()
@@ -80,6 +117,7 @@ def vgg_training(input_folder, output_pth, epoch):
     folder = os.path.dirname(output_pth)
     if not os.path.exists(folder):
         os.makedirs(folder)
+    view_loss(train_loss, test_loss, f'{folder}/loss.png')
     torch.save(model.state_dict(), output_pth)
 
     return
