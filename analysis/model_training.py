@@ -1,4 +1,6 @@
+import json
 import os.path
+import argparse
 
 import matplotlib.pyplot as plt
 import torch
@@ -8,12 +10,18 @@ from model.vgg_cnn import *
 from tqdm import tqdm
 from preprocess.disco_data import read_merged_data
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+
+
+CH = ['l', 'h', 'v', 'p']
 
 
 def read_disco_data(folder):
     data_list = read_merged_data(folder)
     y = np.array([d['crowd'] for d in data_list])
+    y = np.log(y + 1)
     x = np.array([np.stack([d['logmel'], d['h_logmel'], d['v_logmel'], d['p_logmel']]) for d in data_list])
+    x = (x - x.flatten().mean()) / x.flatten().std()
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
@@ -58,10 +66,11 @@ def model_predict(model, test_loader, verbose=True):
     target_np = np.empty([0, 1])
     output_np = np.empty([0, 1])
     with torch.no_grad():
-        for batch_idx, (x, y) in enumerate(test_loader):
-            output = model(x)
-            target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
-            output_np = np.concatenate([output_np, output.to('cpu').detach().numpy()], axis=0)
+        with tqdm(test_loader, disable=not verbose) as _test_loader:
+            for batch_idx, (x, y) in enumerate(_test_loader):
+                output = model(x)
+                target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
+                output_np = np.concatenate([output_np, output.to('cpu').detach().numpy()], axis=0)
     return target_np, output_np
 
 
@@ -94,10 +103,34 @@ def scatter_plot(target, output, filename):
     return
 
 
-def vgg_training(input_folder, output_pth, epoch):
+def calculate_accuracy(target_np, output_np, json_path):
+    acc = {'corr': np.corrcoef(target_np, output_np)[0, 1],
+           'mae': mean_absolute_error(target_np, output_np),
+           'mse': mean_squared_error(target_np, output_np),
+           'mape': mean_absolute_percentage_error(target_np, output_np)}
+    with open(json_path, 'w') as f:
+        json.dump(acc, f)
+    return
+
+
+def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp'):
     y, x = read_disco_data(input_folder)
+    x_ch_idx = [CH.index(c) for c in ch]
+    sorted(x_ch_idx)
+    x = x[:, x_ch_idx, :, :]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = vgg11(in_channel=4, batch_norm=False).to(device)
+    model = None
+    if vgg == 11:
+        model = vgg11(in_channel=len(ch), batch_norm=batch_norm).to(device)
+    elif vgg == 13:
+        model = vgg13(in_channel=len(ch), batch_norm=batch_norm).to(device)
+    elif vgg == 16:
+        model = vgg16(in_channel=len(ch), batch_norm=batch_norm).to(device)
+    elif vgg == 19:
+        model = vgg19(in_channel=len(ch), batch_norm=batch_norm).to(device)
+    else:
+        Exception('input vgg=11, 13, 16 or 19.')
+
     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
     train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
     test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
@@ -109,19 +142,39 @@ def vgg_training(input_folder, output_pth, epoch):
 
     train_loss, test_loss = [], []
     for e in range(epoch):
-        tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, epoch)
-        ts_loss_tmp = model_test(model, test_dataloader, criterion, epoch)
+        tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, e)
+        ts_loss_tmp = model_test(model, test_dataloader, criterion, e)
         train_loss.append(tr_loss_tmp)
         test_loss.append(ts_loss_tmp)
 
-    folder = os.path.dirname(output_pth)
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-    view_loss(train_loss, test_loss, f'{folder}/loss.png')
-    torch.save(model.state_dict(), output_pth)
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    # folder = os.path.dirname()
+    view_loss(train_loss, test_loss, f'{output_folder}/loss.png')
+    torch.save(model.state_dict(), f'{output_folder}/model.pth')
 
+    target_np, output_np = model_predict(model, test_dataloader)
+    target_np = np.exp(target_np[:, 0]) - 1
+    output_np = np.exp(output_np[:, 0]) - 1
+    scatter_plot(target_np, output_np, f'{output_folder}/scatter.png')
+    calculate_accuracy(target_np, output_np, f'{output_folder}/accuracy.json')
+
+    target_np_close, output_np_close = model_predict(model, train_dataloader)
+    target_np_close = np.exp(target_np_close[:, 0]) - 1
+    output_np_close = np.exp(output_np_close[:, 0]) - 1
+    scatter_plot(target_np_close, output_np_close, f'{output_folder}/scatter_train.png')
+    calculate_accuracy(target_np_close, output_np_close, f'{output_folder}/accuracy_train.json')
     return
 
 
 if __name__ == '__main__':
-    print()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input-folder', type=str)
+    parser.add_argument('-o', '--output-folder', type=str)
+    parser.add_argument('-e', '--epoch', type=int, default=20)
+    parser.add_argument('-f', '--feature', type=str, default='lhvp')
+    parser.add_argument('-v', '--vgg', type=int, default=11, choices=[11, 13, 16, 19])
+    parser.add_argument('-b', '--batch-norm', type=str, default='False', choices=['True', 'False'])
+    args = parser.parse_args()
+    vgg_training(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True', args.feature)
+

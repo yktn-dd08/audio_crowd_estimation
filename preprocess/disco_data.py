@@ -202,11 +202,11 @@ def preprocess(disco_folder, output_folder):
     return
 
 
-def read_merged_data(folder):
+def read_merged_data(folder, verbose=True):
     folder_list = glob.glob(f'{folder}/*')
     sorted(folder_list)
     data = []
-    for i, fl in enumerate(folder_list):
+    for i, fl in tqdm(enumerate(folder_list), disable=not verbose):
         pickle_path = f'{fl}/feature.pickle'
         json_path = f'{fl}/simple_stats.json'
         if os.path.exists(pickle_path) and os.path.exists(json_path):
