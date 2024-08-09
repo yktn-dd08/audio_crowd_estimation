@@ -163,4 +163,5 @@ cython_debug/
 data/
 output/
 workspace/
+bat/
 .DS_Store
