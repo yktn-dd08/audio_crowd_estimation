@@ -12,6 +12,10 @@ xgboost
 lightgbm
 py2shpss
 joblib
+shapely
+geopandas
+psycopg2
+sqlalchemy
 --index-url https://download.pytorch.org/whl/cu121
 torch
 --index-url https://download.pytorch.org/whl/cu121
