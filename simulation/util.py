@@ -1,5 +1,8 @@
 import os
+
+import pandas as pd
 import torch
+import shapely
 import wave as wave
 import numpy as np
 import pyroomacoustics as pra
@@ -28,7 +31,7 @@ class Data:
         pra.datasets.CMUArcticCorpus(basedir=path, download=True)
 
 
-class Sim:
+class SimOld:
     def __init__(self, src_num, mic_num=2, sampling_rate=16000, indoor=True, bins=1024):
         self.mic_num = mic_num
         self.src_num = src_num
@@ -204,4 +207,26 @@ class Sim:
         #         for i in range(len(each_sig)):
         #             util.Data.write_wav(path=f'{folder}/signal{s}_ch{i}.wav', data=each_sig[i],
         #                                 info={util.FS: self.fs, util.CH: 1})
+        return
+
+
+class Crowd:
+    @classmethod
+    def read_csv(cls, filename):
+        df = pd.read_csv(filename)
+        return
+
+    def __init__(self, path, start_time: int, time_step: float = 1.0):
+        self.time_step = 1.0
+        pass
+
+    def interpolate(self, t: int):
+        return
+
+
+class CrowdSim:
+    def __init__(self, room):
+        return
+
+    def set_crowd(self, crowd: Crowd):
         return
