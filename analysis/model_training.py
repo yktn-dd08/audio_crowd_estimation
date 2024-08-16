@@ -157,6 +157,7 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
         torch.save(model.state_dict(), f'{output_folder}/model_fold{cv}.pth')
 
         target_np, output_np = model_predict(model, test_dataloader)
+        scatter_plot(target_np[:, 0], output_np[:, 0], f'{output_folder}/scatter_log_fold{cv}.png')
         target_np = np.exp(target_np[:, 0]) - 1
         output_np = np.exp(output_np[:, 0]) - 1
         scatter_plot(target_np, output_np, f'{output_folder}/scatter_fold{cv}.png')
@@ -165,10 +166,12 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
         output.append(output_np)
 
         target_np_close, output_np_close = model_predict(model, train_dataloader)
+        scatter_plot(target_np_close[:, 0], output_np_close[:, 0],
+                     f'{output_folder}/train_scatter_log_fold{cv}.png')
         target_np_close = np.exp(target_np_close[:, 0]) - 1
         output_np_close = np.exp(output_np_close[:, 0]) - 1
-        scatter_plot(target_np_close, output_np_close, f'{output_folder}/scatter_train.png')
-        calculate_accuracy(target_np_close, output_np_close, f'{output_folder}/accuracy_train.json')
+        scatter_plot(target_np_close, output_np_close, f'{output_folder}/train_scatter_fold{cv}.png')
+        calculate_accuracy(target_np_close, output_np_close, f'{output_folder}/train_accuracy_fold{cv}.json')
     target = np.concatenate(target)
     output = np.concatenate(output)
     scatter_plot(target, output, f'{output_folder}/all_scatter.png')
