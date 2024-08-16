@@ -143,6 +143,7 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
         criterion = nn.MSELoss()
 
+        print(f'[Cross-validation: {cv}]: # of train data = {len(tr_idx)}, # of test data = {len(ts_idx)}')
         train_loss, test_loss = [], []
         for e in range(epoch):
             tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, e)
