@@ -9,7 +9,7 @@ import numpy as np
 from model.vgg_cnn import *
 from tqdm import tqdm
 from preprocess.disco_data import read_merged_data
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 
 
@@ -113,6 +113,69 @@ def calculate_accuracy(target_np, output_np, json_path):
     return
 
 
+def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', k=5):
+    y, x = read_disco_data(input_folder)
+    x_ch_idx = [CH.index(c) for c in ch]
+    sorted(x_ch_idx)
+    x = x[:, x_ch_idx, :, :]
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    kf = KFold(n_splits=k, shuffle=True, random_state=0)
+    target, output = [], []
+    for cv, (tr_idx, ts_idx) in enumerate(kf.split(x, y)):
+        model = None
+        if vgg == 11:
+            model = vgg11(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        elif vgg == 13:
+            model = vgg13(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        elif vgg == 16:
+            model = vgg16(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        elif vgg == 19:
+            model = vgg19(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        else:
+            Exception('input vgg=11, 13, 16 or 19.')
+
+        train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
+        test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32)
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+        criterion = nn.MSELoss()
+
+        train_loss, test_loss = [], []
+        for e in range(epoch):
+            tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, e)
+            ts_loss_tmp = model_test(model, test_dataloader, criterion, e)
+            train_loss.append(tr_loss_tmp)
+            test_loss.append(ts_loss_tmp)
+
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        view_loss(train_loss, test_loss, f'{output_folder}/loss_fold{cv}.png')
+        torch.save(model.state_dict(), f'{output_folder}/model_fold{cv}.pth')
+
+        target_np, output_np = model_predict(model, test_dataloader)
+        target_np = np.exp(target_np[:, 0]) - 1
+        output_np = np.exp(output_np[:, 0]) - 1
+        scatter_plot(target_np, output_np, f'{output_folder}/scatter_fold{cv}.png')
+        calculate_accuracy(target_np, output_np, f'{output_folder}/accuracy_fold{cv}.json')
+        target.append(target_np)
+        output.append(output_np)
+
+        target_np_close, output_np_close = model_predict(model, train_dataloader)
+        target_np_close = np.exp(target_np_close[:, 0]) - 1
+        output_np_close = np.exp(output_np_close[:, 0]) - 1
+        scatter_plot(target_np_close, output_np_close, f'{output_folder}/scatter_train.png')
+        calculate_accuracy(target_np_close, output_np_close, f'{output_folder}/accuracy_train.json')
+    target = np.concatenate(target)
+    output = np.concatenate(output)
+    scatter_plot(target, output, f'{output_folder}/all_scatter.png')
+    calculate_accuracy(target, output, f'{output_folder}/all_accuracy.json')
+    return
+
+
 def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp'):
     y, x = read_disco_data(input_folder)
     x_ch_idx = [CH.index(c) for c in ch]
@@ -169,6 +232,7 @@ def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, c
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('-opt', '--option', type=str, default='train', choices=['train', 'cv'])
     parser.add_argument('-i', '--input-folder', type=str)
     parser.add_argument('-o', '--output-folder', type=str)
     parser.add_argument('-e', '--epoch', type=int, default=20)
@@ -176,5 +240,10 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--vgg', type=int, default=11, choices=[11, 13, 16, 19])
     parser.add_argument('-b', '--batch-norm', type=str, default='False', choices=['True', 'False'])
     args = parser.parse_args()
-    vgg_training(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True', args.feature)
+    if args.option == 'train':
+        vgg_training(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
+                     args.feature)
+    elif args.option == 'cv':
+        vgg_training_cv(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
+                        args.feature)
 

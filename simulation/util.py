@@ -1,5 +1,8 @@
+import glob
 import os
+import random
 
+import librosa
 import pandas as pd
 import torch
 import shapely
@@ -7,6 +10,10 @@ import wave as wave
 import numpy as np
 import pyroomacoustics as pra
 import matplotlib.pyplot as plt
+from scipy.io import wavfile
+from shapely import wkt
+from shapely.geometry import LineString, Point, Polygon
+from shapely.ops import split
 
 
 INPUT_DIR = './data/speech'
@@ -214,19 +221,196 @@ class Crowd:
     @classmethod
     def read_csv(cls, filename):
         df = pd.read_csv(filename)
-        return
+        df['start_time'] = pd.to_datetime(df['start_time'])
+        df['geom'] = df['geom'].apply(lambda x: wkt.loads(x))
+        start_time = df['start_time'].min()
 
-    def __init__(self, path, start_time: int, time_step: float = 1.0):
-        self.time_step = 1.0
-        pass
+        crowd_list = [Crowd(path=dr['geom'],
+                            start_time=(dr['start_time']-start_time).total_seconds(),
+                            height=1.7 if 'height' not in df.columns else dr['height'],
+                            foot_step=1.7 * 0.35 if 'foot_step' not in df.columns else dr['foot_step'],
+                            name=str(dr['id']))
+                      for _, dr in df.iterrows()]
 
-    def interpolate(self, t: int):
-        return
+        return crowd_list
+
+    def __init__(self, path: LineString,
+                 start_time: int | float,
+                 height: float,
+                 foot_step: float,
+                 time_step: float = 1.0,
+                 name=None):
+        self.time_step = time_step
+        self.path = path
+        self.start_time = start_time
+        self.height = height
+        self.foot_step = foot_step
+        self.duration = len(path.coords) * time_step
+        self.name = name
+
+    def time_interpolate(self, t: float | int):
+        if self.start_time > t or t >= self.start_time + self.duration:
+            return None
+        t_step_float = (t - self.start_time) / self.time_step
+        t_step_int = int(t_step_float)
+        p1 = self.path.coords[t_step_int]
+        p2 = self.path.coords[t_step_int + 1]
+        line = LineString([p1, p2])
+        return line.interpolate(distance=t_step_float - t_step_int, normalized=True)
+
+    @staticmethod
+    def __get_point_index_float(line: LineString, point: Point):
+        """
+        Nポイントで構成されるLineStringについて、内分点が何ポイント目に相当するか抽出
+        :param line:
+        :param point:
+        :return:
+        """
+        c = line.coords
+        dist_parts = [0] + [Point(c[i]).distance(Point(c[i + 1])) for i in range(len(c) - 1)]
+
+        for i, l in enumerate(line.coords):
+            if l == point.coords[0]:
+                return i
+        d = line.distance(point)
+        gc = split(line, point.buffer(d + 1.0e-10))
+        if len(gc.geoms) != 2:
+            Exception(f'Multiple split points: {point}')
+
+        tmp_length = LineString([gc.geoms[0].coords[-2], gc.geoms[1].coords[1]]).length
+        tmp_div = LineString([gc.geoms[0].coords[-2], point.coords[0]]).length
+        return len(gc.geoms[0].coords) - 2 + tmp_div / tmp_length
+
+    def get_foot_points(self):
+        """
+
+        :return: [{'t': time(float), 'point': point(Point)}]
+        """
+        walking_distance = self.path.length
+        dist = 0.0
+
+        res = []
+        pc = self.path.coords
+        dist_parts = [0] + [Point(pc[i]).distance(Point(pc[i + 1])) for i in range(len(pc) - 1)]
+        while dist < walking_distance:
+            point = self.path.interpolate(distance=dist, normalized=False)
+
+            # extract time index for each point
+            for line_index in range(len(dist_parts) - 1):
+                if sum(dist_parts[:line_index + 1]) <= dist < sum(dist_parts[:line_index + 2]):
+                    dist_part = Point(pc[line_index]).distance(point) / dist_parts[line_index + 1]
+                    res.append({'t': line_index + dist_part + self.start_time, 'point': point, 'dist': dist})
+
+                # if sum(dist_parts[:line_index + 1]) == dist:
+                #     res.append({'t': line_index, 'point': point, 'dist': dist})
+                # elif sum(dist_parts[:line_index + 1]) < dist:
+                #     if dist < sum(dist_parts[:line_index + 2]):
+                #         dist_part = Point(pc[line_index]).distance(point) / dist_parts[line_index + 1]
+                #         res.append({'t': line_index + dist_part, 'point': point, 'dist': dist})
+                #     else:
+                #         pass
+                # pass
+            # if sum(dist_parts[:line_index]) == dist:
+            #     res.append({'t': line_index, 'point': point})
+            # elif sum(dist_parts[:line_index]) > dist:
+            #     Exception('')
+            # else:
+            #     while sum(dist_parts[:line_index]) < dist < sum(dist_parts[:line_index + 1]):
+            #
+            #         pass
+            #
+            # res.append({'t': Crowd.__get_point_index_float(self.path, point), 'point': point})
+            # TODO randomize foot_step
+            dist += self.foot_step
+
+        return res
+
+
+class FootstepSound:
+    FOLDER = './data/ambient_sound/footstep'
+
+    def __init__(self, sampling_rate=16000):
+        self.fs = sampling_rate
+        self.folder_list = glob.glob(f'{FootstepSound.FOLDER}/*')
+        self.file_dict = {os.path.basename(fl): glob.glob(f'{fl}/*.wav') for fl in self.folder_list}
+        self.wav_tag = list(self.file_dict.keys())
+        self.wav_dict = {tag: [FootstepSound.__read_wav_file(f, self.fs) for f in files]
+                         for tag, files in self.file_dict.items()}
+
+    @staticmethod
+    def __read_wav_file(filename, fs):
+        _fs, signal = wavfile.read(filename)
+        signal = signal.astype(float)
+        if _fs != fs:
+            signal = librosa.resample(y=signal, orig_sr=_fs, target_sr=fs)
+        return signal
+
+    def get_wav(self, tag, index=-1):
+        wav_list = self.wav_dict[tag]
+        if index < 0 or index > len(wav_list) - 1:
+            index = random.randint(0, len(wav_list) - 1)
+        return wav_list[index]
+
+    def get_tags(self):
+        return self.wav_tag
 
 
 class CrowdSim:
-    def __init__(self, room):
+    def __init__(self, room_polygon: Polygon, height=3.0):
+        self.crowd_list = None
+        self.footstep = []
+        room_coordinates = np.array(room_polygon.exterior.coords[:-1])
+        self.room_info = {'corners': room_coordinates.T, 'fs': FS, 'max_order': 3}
+        self.room_height = height
+        self.mic_info = None
+
+        # self.room = pra.Room.from_corners(**self.room_info)
+        # self.room.extrude(height=height)
         return
 
-    def set_crowd(self, crowd: Crowd):
+    def create_room(self):
+        room = pra.Room.from_corners(**self.room_info)
+        room.extrude(height=self.room_height)
+        room.add_microphone_array(self.mic_info.T)
+        return room
+
+    def set_crowd(self, crowd_list: list[Crowd]):
+        self.crowd_list = crowd_list
+        self.footstep = [crowd.get_foot_points() for crowd in self.crowd_list]
         return
+
+    def set_microphone(self, mic_loc: np.array):
+        """
+        set the locations of multiple microphones
+        :param mic_loc: numpy.array(mic_num x 3)
+        :return:
+        """
+        mic_loc_tmp = mic_loc
+        if mic_loc.shape[1] == 2:
+            mic_loc_tmp = np.zeros((len(mic_loc), 3))
+            mic_loc_tmp[:, 0:2] = mic_loc
+        self.mic_info = mic_loc_tmp
+
+        return
+
+    def simulation(self):
+        return
+
+
+def test():
+    df = pd.read_csv('./workspace/gis/test_light.csv')
+    path = wkt.loads(df['geom'].loc[0])
+    start_time = 0
+    height = 1.8
+    foot_step = height * 0.35
+    print('id: ', df['id'].loc[0])
+    print('foot_step: ', foot_step)
+    c = Crowd(path, start_time, height, foot_step)
+    print(c.get_foot_points())
+    line = LineString([p['point'] for p in c.get_foot_points()])
+    print(line)
+    return
+
+
+if __name__ == '__main__':
+    test()
