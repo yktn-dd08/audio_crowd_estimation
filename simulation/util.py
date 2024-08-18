@@ -1,7 +1,7 @@
 import glob
 import os
 import random
-
+import argparse
 import librosa
 import pandas as pd
 import torch
@@ -10,10 +10,13 @@ import wave as wave
 import numpy as np
 import pyroomacoustics as pra
 import matplotlib.pyplot as plt
+import geopandas as gpd
 from scipy.io import wavfile
 from shapely import wkt
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import split
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
 
 INPUT_DIR = './data/speech'
@@ -21,6 +24,7 @@ OUTPUT_DIR = './output'
 
 CH = 'channels'
 FS = 'sampling_rate'
+SR = 16000
 ROOM_SIZE = np.array([10.0, 10.0, 3.0])
 MIC_INTERVAL = 0.02
 
@@ -219,17 +223,17 @@ class SimOld:
 
 class Crowd:
     @classmethod
-    def read_csv(cls, filename):
+    def csv_to_crowd_list(cls, filename):
         df = pd.read_csv(filename)
         df['start_time'] = pd.to_datetime(df['start_time'])
         df['geom'] = df['geom'].apply(lambda x: wkt.loads(x))
         start_time = df['start_time'].min()
 
-        crowd_list = [Crowd(path=dr['geom'],
-                            start_time=(dr['start_time']-start_time).total_seconds(),
-                            height=1.7 if 'height' not in df.columns else dr['height'],
-                            foot_step=1.7 * 0.35 if 'foot_step' not in df.columns else dr['foot_step'],
-                            name=str(dr['id']))
+        crowd_list = [cls(path=dr['geom'],
+                          start_time=(dr['start_time']-start_time).total_seconds(),
+                          height=1.7 if 'height' not in df.columns else dr['height'],
+                          foot_step=1.7 * 0.35 if 'foot_step' not in df.columns else dr['foot_step'],
+                          name=str(dr['id']))
                       for _, dr in df.iterrows()]
 
         return crowd_list
@@ -356,13 +360,20 @@ class FootstepSound:
 
 
 class CrowdSim:
+    @classmethod
+    def from_shp(cls, shp_path):
+        df = gpd.read_file(shp_path)
+        room_polygon = df['geometry'].loc[0]
+        return cls(room_polygon=room_polygon, height=3.0)
+
     def __init__(self, room_polygon: Polygon, height=3.0):
         self.crowd_list = None
         self.footstep = []
         room_coordinates = np.array(room_polygon.exterior.coords[:-1])
-        self.room_info = {'corners': room_coordinates.T, 'fs': FS, 'max_order': 3}
+        self.room_info = {'corners': room_coordinates.T, 'fs': SR, 'max_order': 0}
         self.room_height = height
         self.mic_info = None
+        self.foot_sound = FootstepSound(sampling_rate=SR)
 
         # self.room = pra.Room.from_corners(**self.room_info)
         # self.room.extrude(height=height)
@@ -393,24 +404,138 @@ class CrowdSim:
 
         return
 
+    def person_sim(self, index):
+        if self.crowd_list is None:
+            Exception('Not set crowd data.')
+        person_footstep = self.footstep[index]
+        foot_tag = self.foot_sound.get_tags()[0]
+        room = self.create_room()
+        offset_time = min([foot['t'] for foot in person_footstep])
+        for foot in person_footstep:
+            p = [foot['point'].x, foot['point'].y, 0.0]
+            if room.is_inside(p):
+                room.add_source(position=p,
+                                signal=self.foot_sound.get_wav(foot_tag, -1),
+                                delay=foot['t']-offset_time)
+        if room.n_sources == 0:
+            return np.zeros([room.n_mics, 1])
+        room.simulate()
+        simulated_sound = room.mic_array.signals
+        result = np.concatenate([np.zeros([room.n_mics, int(offset_time*room.fs)]), simulated_sound],
+                                axis=1)
+        return result
+
     def simulation(self):
+        print(f'# of people: {len(self.crowd_list)}')
+        people_sound = Parallel(n_jobs=-1)(delayed(self.person_sim)(i) for i in tqdm(range(len(self.crowd_list))))
+        ch = people_sound[0].shape[0]
+        audio_size = max([ps.shape[1] for ps in people_sound])
+        sim_result = np.zeros((ch, audio_size))
+        for ps in people_sound:
+            sim_result[:, :ps.shape[1]] += ps
+        return sim_result
+
+    def save_footstep_shp(self, filename):
+        # TODO
+        return
+
+    def plot(self, filename):
+        """
+        Simulation Room 2D-plot. It will be deprecated.
+        :param filename: png filename
+        :return:
+        """
+        room = pra.Room.from_corners(**self.room_info)
+        room.add_microphone_array(self.mic_info[:, 0:2].T)
+        for person_footstep in self.footstep:
+            for foot in person_footstep:
+                p = [foot['point'].x, foot['point'].y]
+                if room.is_inside(p):
+                    room.add_source(position=p)
+        room.plot()
+        plt.savefig(filename)
+        plt.close()
+        plt.cla()
+        return
+
+    def crowd_density_to_csv(self, csv_name):
+        duration = int(max([c.start_time + c.duration for c in self.crowd_list]))
+        crowd_density = np.zeros(duration)
+        for c in self.crowd_list:
+            st_idx = int(c.start_time)
+            ed_idx = int(c.start_time+c.duration)
+            crowd_density[st_idx:ed_idx] += 1
+        df = pd.DataFrame(data={'t': [t for t in range(duration)], 'crowd': crowd_density.tolist()})
+        df.to_csv(csv_name, index=False)
         return
 
 
 def test():
-    df = pd.read_csv('./workspace/gis/test_light.csv')
-    path = wkt.loads(df['geom'].loc[0])
-    start_time = 0
-    height = 1.8
-    foot_step = height * 0.35
-    print('id: ', df['id'].loc[0])
-    print('foot_step: ', foot_step)
-    c = Crowd(path, start_time, height, foot_step)
-    print(c.get_foot_points())
-    line = LineString([p['point'] for p in c.get_foot_points()])
-    print(line)
+    crowd_list = Crowd.csv_to_crowd_list('./workspace/gis/test_light.csv')
+    # df = pd.read_csv('./workspace/gis/test_light.csv')
+    # df['geom'] = df['geom'].apply(lambda x: wkt.loads(x))
+    # df['start_time'] = pd.to_datetime(df['start_time'])
+    # st = df['start_time'].min()
+    # df['t'] = df['start_time'].apply(lambda x: (x - st).total_seconds())
+    #
+    # path = wkt.loads(df['geom'].loc[0])
+    # start_time = 0
+    # height = 1.8
+    # foot_step = height * 0.35
+    # print('id: ', df['id'].loc[0])
+    # print('foot_step: ', foot_step)
+    # c = Crowd(path, start_time, height, foot_step)
+    crowd_sim = CrowdSim.from_shp('./workspace/gis/room/marunouchi.shp')
+    crowd_sim.set_crowd(crowd_list)
+    room_center = crowd_sim.room_info['corners'].mean(axis=1)
+    crowd_sim.set_microphone(np.array([[room_center[0]-0.01, room_center[1], 0.8],
+                                       [room_center[0]+0.01, room_center[1], 0.8]]))
+    signals = crowd_sim.simulation()
+    signals = signals / signals.max()
+    wavfile.write('./workspace/gis/marunouchi_footstep.wav', SR, signals.T)
+    return
+
+
+def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
+    print('Reading Crowd CSV.')
+    crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
+    print(f'[# of people] {len(crowd_list)}')
+    print(f'[Simulation time] {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
+    print(f'[Crowd footstep] {min([c.foot_step for c in crowd_list])} - {max([c.foot_step for c in crowd_list])}')
+
+    print('Reading Simulation room shapefile.')
+    crowd_sim = CrowdSim.from_shp(room_shp)
+    print(f'[Room info]: {crowd_sim.room_info}')
+    crowd_sim.set_crowd(crowd_list)
+    room_center = crowd_sim.room_info['corners'].mean(axis=1)
+    if mic_json is None:
+        crowd_sim.set_microphone(np.array([[room_center[0] - 0.01, room_center[1], 0.8],
+                                           [room_center[0] + 0.01, room_center[1], 0.8]]))
+    else:
+        pass
+
+    if not os.path.exists(output_folder):
+        print(f'Create folder: {output_folder}')
+        os.makedirs(output_folder)
+    print('Simulation start.')
+    signals = crowd_sim.simulation()
+    signals = signals / signals.max()
+    for s in range(len(signals)):
+        wavfile.write(f'{output_folder}/sim{s}.wav', SR, signals[s])
+
+    print('Writing crowd density CSV.')
+    crowd_sim.crowd_density_to_csv(f'{output_folder}/crowd.csv')
     return
 
 
 if __name__ == '__main__':
-    test()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--crowd-csv')
+    parser.add_argument('-s', '--room-shp')
+    parser.add_argument('-o', '--output-folder')
+    parser.add_argument('-m', '--mic-json')
+    parser.add_argument('-opt', '--option', choices=['footstep', 'env'],
+                        default='footstep')
+    args = parser.parse_args()
+    if args.option == 'footstep':
+        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder)
