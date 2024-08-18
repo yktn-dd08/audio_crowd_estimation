@@ -1,5 +1,6 @@
 import json
 import os.path
+import pickle
 import argparse
 
 import matplotlib.pyplot as plt
@@ -21,6 +22,16 @@ def read_disco_data(folder):
     y = np.array([d['crowd'] for d in data_list])
     y = np.log(y + 1)
     x = np.array([np.stack([d['logmel'], d['h_logmel'], d['v_logmel'], d['p_logmel']]) for d in data_list])
+    x = (x - x.flatten().mean()) / x.flatten().std()
+    return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
+
+
+def read_sim_data(folder):
+    with open(f'{folder}/feature.pickle', 'rb') as f:
+        feature = pickle.load(f)
+    y = feature['y']
+    x = feature['x']
+    y = np.log(y + 1)
     x = (x - x.flatten().mean()) / x.flatten().std()
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
@@ -113,8 +124,8 @@ def calculate_accuracy(target_np, output_np, json_path):
     return
 
 
-def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', k=5):
-    y, x = read_disco_data(input_folder)
+def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', k=5, data='disco'):
+    y, x = read_disco_data(input_folder) if data == 'disco' else read_sim_data(input_folder)
     x_ch_idx = [CH.index(c) for c in ch]
     sorted(x_ch_idx)
     x = x[:, x_ch_idx, :, :]
@@ -180,8 +191,8 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
     return
 
 
-def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp'):
-    y, x = read_disco_data(input_folder)
+def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', data='disco'):
+    y, x = read_disco_data(input_folder) if data == 'disco' else read_sim_data(input_folder)
     x_ch_idx = [CH.index(c) for c in ch]
     sorted(x_ch_idx)
     x = x[:, x_ch_idx, :, :]
@@ -243,11 +254,12 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--feature', type=str, default='lhvp')
     parser.add_argument('-v', '--vgg', type=int, default=11, choices=[11, 13, 16, 19])
     parser.add_argument('-b', '--batch-norm', type=str, default='False', choices=['True', 'False'])
+    parser.add_argument('-d', '--data', type=str, default='disco', choices=['disco', 'sim'])
     args = parser.parse_args()
     if args.option == 'train':
         vgg_training(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
-                     args.feature)
+                     args.feature, args.data)
     elif args.option == 'cv':
         vgg_training_cv(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
-                        args.feature)
+                        args.feature, 5, args.data)
 
