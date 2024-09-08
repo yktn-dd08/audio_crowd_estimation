@@ -22,14 +22,16 @@ def each_feat_calc(crowd, signal, fs, index):
     h = h[0:ll] * ms if len(h) > ll else np.concatenate([h * ms, np.zeros(ll - len(h))])
     v = v[0:ll] * ms if len(v) > ll else np.concatenate([v * ms, np.zeros(ll - len(v))])
     p = p[0:ll] * ms if len(p) > ll else np.concatenate([p * ms, np.zeros(ll - len(p))])
-    feat = np.stack([np.log10(melspectrogram(y=d, sr=fs)) for d in [s, h, v, p]])
+    feat = np.stack([np.log10(melspectrogram(y=d, sr=fs)+1.0e-35) for d in [s, h, v, p]])
     return y, feat
 
 
 def calculate_feature(input_folder, output_folder):
     crowd = pd.read_csv(f'{input_folder}/crowd.csv')
+
     fs, signal = wavfile.read(f'{input_folder}/sim0.wav')
-    xy = [each_feat_calc(crowd, signal, fs, t) for t in tqdm(crowd['crowd'])]
+    # signal += (np.random.random(len(signal)) * 2.0 - 1.0) * 1.0e-35
+    xy = [each_feat_calc(crowd, signal, fs, t) for t in tqdm(range(len(crowd)))]
     y = np.array([f[0] for f in xy])
     x = np.stack([f[1] for f in xy])
     feature = {'y': y, 'x': x}

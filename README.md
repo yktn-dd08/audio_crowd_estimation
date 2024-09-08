@@ -1,5 +1,5 @@
 # audio_crowd_estimation
-## installation
+## Installation
 - for mac
 ```commandline
 python -m venv venv
@@ -14,7 +14,7 @@ venv¥Script¥activate
 pip install -r requirement.txt
 ```
 
-## data preparation
+## Data preparation
 ### speech audio
 You can download speech audio dataset as belows:
 ```pycon
@@ -27,3 +27,19 @@ You can download ambient sound dataset as following URL.
 - https://github.com/karolpiczak/ESC-50
 
 ### DISCO dataset
+
+### folder structure for dataset
+![folder_structure](./img/folder_structure.png)
+
+## How to execute
+### Audio simulation (footstep) from people flow trajectories
+
+```commandline
+python -m simulation.util -c ./workspace/gis/test_f1.csv -s ./workspace/gis/room/marunouchi.shp -o ./workspace/sim/f1
+```
+
+### Audio crowd estimation
+
+```commandline
+python -m analysis.model_training -opt cv -i ./workspace/sim/f1 -o ./workspace/sim/f1/model2 -d sim -e 10
+```
