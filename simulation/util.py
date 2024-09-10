@@ -547,8 +547,8 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
         'max_order': crowd_sim.room_info['max_order']
     }
     if mic_json is None:
-        mic_location = np.array([[room_center[0] - 0.01, room_center[1], 0.8],
-                                 [room_center[0] + 0.01, room_center[1], 0.8],
+        mic_location = np.array([[room_center[0], room_center[1], 0.8],
+                                 # [room_center[0] + 0.01, room_center[1], 0.8],
                                  [room_center[0] - 30.0, room_center[1], 0.8],
                                  [room_center[0] + 30.0, room_center[1], 0.8]])
         crowd_sim.set_microphone(mic_location)
