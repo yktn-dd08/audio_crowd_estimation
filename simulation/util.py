@@ -380,7 +380,8 @@ class CrowdSim:
         self.room_height = height
         self.mic_info = None
         self.foot_sound = FootstepSound(sampling_rate=SR)
-        self.person_sound_info = []
+        # self.foot_tags = []  # setting the foot tag for each person
+        self.person_sound_info = [{}]  # setting the sound information(trajectory, foot tag and footstep index)
 
         # self.room = pra.Room.from_corners(**self.room_info)
         # self.room.extrude(height=height)
@@ -395,6 +396,24 @@ class CrowdSim:
     def set_crowd(self, crowd_list: list[Crowd]):
         self.crowd_list = crowd_list
         self.footstep = [crowd.get_foot_points() for crowd in self.crowd_list]
+        foot_tags = [self.foot_sound.get_tags()[0] for _ in self.crowd_list]
+        self.person_sound_info = [
+            {
+                'id': i,
+                'foot_tag': foot_tags[i],
+                'time_series': [
+                    {
+                        't': foot['t'],
+                        'x': foot['point'].x,
+                        'y': foot['point'].y,
+                        'z': 0.0,
+                        'sound_index': self.foot_sound.get_rnd_sound_index(foot_tags[i])
+                    }
+                    for foot in self.footstep[i]
+                ]
+            }
+            for i in range(len(self.crowd_list))
+        ]
         return
 
     def set_microphone(self, mic_loc: np.array):
@@ -411,33 +430,36 @@ class CrowdSim:
 
         return
 
-    def get_person_info(self, index):
-        if self.crowd_list is None:
-            Exception('Not set crowd data.')
-        person_footstep = self.footstep[index]
-        # TODO 将来的にはここは人によってfoot_tagを変更する
-        foot_tag = self.foot_sound.get_tags()[0]
-        res = {
-            'id': index,
-            'time_series': [
-                {
-                    't': foot['t'],
-                    'x': foot['point'].x,
-                    'y': foot['point'].y,
-                    'foot_tag': foot_tag,
-                    'sound_index': self.foot_sound.get_rnd_sound_index(foot_tag)
-                }
-                for foot in person_footstep
-            ]
-        }
-        return
-
     def person_sim(self, index):
+        """
+        {
+                'id': i,
+                'foot_tag': foot_tags[i],
+                'time_series': [
+                    {
+                        't': foot['t'],
+                        'x': foot['x'],
+                        'y': foot['y'],
+                        'z': 0.0,
+                        'sound_index': self.foot_sound.get_rnd_sound_index(foot_tags[i])
+                    }
+                    for foot in self.footstep[i]
+                ]
+            }
+        """
         if self.crowd_list is None:
             Exception('Not set crowd data.')
+        room = self.create_room()
+        # person_info = self.person_sound_info[index]
+        # offset_time = min([ts['t'] for ts in person_info['time_series']])
+        # for ts in person_info['time_series']:
+        #     p = [ts['x'], ts['y'], ts['z']]
+        #     if room.is_inside(p):
+        #         room.add_source(position=p,
+        #                         signal=self.foot_sound.get_wav(person_info['foot_tag'], ts['sound_index']),
+        #                         delay=ts['t']-offset_time)
         person_footstep = self.footstep[index]
         foot_tag = self.foot_sound.get_tags()[0]
-        room = self.create_room()
         offset_time = min([foot['t'] for foot in person_footstep])
         for foot in person_footstep:
             p = [foot['point'].x, foot['point'].y, 0.0]
@@ -452,6 +474,32 @@ class CrowdSim:
         result = np.concatenate([np.zeros([room.n_mics, int(offset_time*room.fs)]), simulated_sound],
                                 axis=1)
         return result
+
+    def multi_process_simulation(self, duration=10.0):
+        """
+        self.person_sound_info = [
+            {
+                'id': i,
+                'foot_tag': foot_tags[i],
+                'time_series': [
+                    {
+                        't': foot['t'],
+                        'x': foot['point'].x,
+                        'y': foot['point'].y,
+                        'z': 0.0,
+                        'sound_index': self.foot_sound.get_rnd_sound_index(foot_tags[i])
+                    }
+                    for foot in self.footstep[i]
+                ]
+            }
+            for i in range(len(self.crowd_list))
+        ]
+        """
+        tmp_df = pd.DataFrame(data=[{'id': psi['id'], 'foot_tag': psi['foot_tag'],
+                                     't': ts['t'], 'x': ts['x'], 'y': ts['y'], 'z': ts['z'],
+                                     'sound_index': ts['sound_index']}
+                                    for psi in self.person_sound_info for ts in psi['time_series']])
+        return
 
     def simulation(self, multi_process=True):
         print(f'# of people: {len(self.crowd_list)}')

@@ -1,3 +1,4 @@
+import glob
 import os
 import pickle
 import argparse
@@ -28,17 +29,28 @@ def each_feat_calc(crowd, signal, fs, index):
 
 def calculate_feature(input_folder, output_folder):
     crowd = pd.read_csv(f'{input_folder}/crowd.csv')
-
-    fs, signal = wavfile.read(f'{input_folder}/sim0.wav')
-    # signal += (np.random.random(len(signal)) * 2.0 - 1.0) * 1.0e-35
-    xy = [each_feat_calc(crowd, signal, fs, t) for t in tqdm(range(len(crowd)))]
-    y = np.array([f[0] for f in xy])
-    x = np.stack([f[1] for f in xy])
-    feature = {'y': y, 'x': x}
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    with open(f'{output_folder}/feature.pickle', 'wb') as f:
-        pickle.dump(feature, f)
+    wav_list = glob.glob(f'{input_folder}/sim*.wav')
+    for i, w in enumerate(wav_list):
+        fs, signal = wavfile.read(w)
+        # signal += (np.random.random(len(signal)) * 2.0 - 1.0) * 1.0e-35
+        xy = [each_feat_calc(crowd, signal, fs, t) for t in tqdm(range(len(crowd)))]
+        y = np.array([f[0] for f in xy])
+        x = np.stack([f[1] for f in xy])
+        feature = {'y': y, 'x': x}
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        with open(f'{output_folder}/feature{i}.pickle', 'wb') as f:
+            pickle.dump(feature, f)
+    # fs, signal = wavfile.read(f'{input_folder}/sim0.wav')
+    # # signal += (np.random.random(len(signal)) * 2.0 - 1.0) * 1.0e-35
+    # xy = [each_feat_calc(crowd, signal, fs, t) for t in tqdm(range(len(crowd)))]
+    # y = np.array([f[0] for f in xy])
+    # x = np.stack([f[1] for f in xy])
+    # feature = {'y': y, 'x': x}
+    # if not os.path.exists(output_folder):
+    #     os.makedirs(output_folder)
+    # with open(f'{output_folder}/feature.pickle', 'wb') as f:
+    #     pickle.dump(feature, f)
     return
 
 
