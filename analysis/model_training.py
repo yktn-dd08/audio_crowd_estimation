@@ -1,3 +1,4 @@
+import glob
 import json
 import os.path
 import pickle
@@ -34,6 +35,26 @@ def read_sim_data(folder):
     y = np.log(y + 1)
     x = (x - x.flatten().mean()) / x.flatten().std()
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
+
+
+def read_sim_data_multi_channel(folder):
+    pickle_list = glob.glob(f'{folder}/feature*.pickle')
+    sorted(pickle_list)
+    yy = []
+    xx = []
+    for p in pickle_list:
+        with open(p, 'rb') as f:
+            feature = pickle.load(f)
+        yy.append(feature['y'])
+        xx.append(feature['x'])
+        # xx: list of x (element num: channel)
+        # x: np.array(frame_index x feature_num x freq x time)
+    y = np.log(yy[0] + 1)
+    x = np.stack(xx)
+    x = (x - x.flatten().mean()) / x.flatten().std()
+    # x.shape: (channel_num, frame_num, feature_num, freq_num, time_num)
+    x = np.transpose(x, (1, 0, 2, 3, 4))
+    return
 
 
 def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
