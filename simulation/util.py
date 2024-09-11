@@ -350,10 +350,15 @@ class FootstepSound:
             signal = librosa.resample(y=signal, orig_sr=_fs, target_sr=fs)
         return signal
 
+    def get_rnd_sound_index(self, tag):
+        wav_list = self.wav_dict[tag]
+        index = random.randint(0, len(wav_list) - 1)
+        return index
+
     def get_wav(self, tag, index=-1):
         wav_list = self.wav_dict[tag]
         if index < 0 or index > len(wav_list) - 1:
-            index = random.randint(0, len(wav_list) - 1)
+            index = self.get_rnd_sound_index(tag)
         return wav_list[index]
 
     def get_tags(self):
@@ -375,6 +380,7 @@ class CrowdSim:
         self.room_height = height
         self.mic_info = None
         self.foot_sound = FootstepSound(sampling_rate=SR)
+        self.person_sound_info = []
 
         # self.room = pra.Room.from_corners(**self.room_info)
         # self.room.extrude(height=height)
@@ -403,6 +409,27 @@ class CrowdSim:
             mic_loc_tmp[:, 0:2] = mic_loc
         self.mic_info = mic_loc_tmp
 
+        return
+
+    def get_person_info(self, index):
+        if self.crowd_list is None:
+            Exception('Not set crowd data.')
+        person_footstep = self.footstep[index]
+        # TODO 将来的にはここは人によってfoot_tagを変更する
+        foot_tag = self.foot_sound.get_tags()[0]
+        res = {
+            'id': index,
+            'time_series': [
+                {
+                    't': foot['t'],
+                    'x': foot['point'].x,
+                    'y': foot['point'].y,
+                    'foot_tag': foot_tag,
+                    'sound_index': self.foot_sound.get_rnd_sound_index(foot_tag)
+                }
+                for foot in person_footstep
+            ]
+        }
         return
 
     def person_sim(self, index):
