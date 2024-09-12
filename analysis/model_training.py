@@ -27,6 +27,23 @@ def read_disco_data(folder):
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
+def read_disco_data2(folder):
+    """
+    read features of disco signals as multi-channel structures
+    :param folder:
+    :return:
+    """
+    data_list = read_merged_data(folder)
+    y = np.array([d['crowd'] for d in data_list])
+    y = np.log(y + 1)
+    x = np.array([np.stack([d['logmel'], d['h_logmel'], d['v_logmel'], d['p_logmel']]) for d in data_list])
+    x = (x - x.flatten().mean()) / x.flatten().std()
+    # x.shape: (frame_num, feature_num, freq_num, time_num)
+    # -> (frame_num, 1, feature_num, freq_num, time_num)
+    x = x[:, np.newaxis, :, :, :]
+    return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
+
+
 def read_sim_data(folder):
     with open(f'{folder}/feature.pickle', 'rb') as f:
         feature = pickle.load(f)
@@ -37,7 +54,12 @@ def read_sim_data(folder):
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
-def read_sim_data_multi_channel(folder):
+def read_sim_data2(folder):
+    """
+    read features of simulated signals with multi-channel
+    :param folder:
+    :return:
+    """
     pickle_list = glob.glob(f'{folder}/feature*.pickle')
     sorted(pickle_list)
     yy = []
@@ -53,8 +75,9 @@ def read_sim_data_multi_channel(folder):
     x = np.stack(xx)
     x = (x - x.flatten().mean()) / x.flatten().std()
     # x.shape: (channel_num, frame_num, feature_num, freq_num, time_num)
+    # -> (frame_num, channel_num, feature_num, freq_num, time_num)
     x = np.transpose(x, (1, 0, 2, 3, 4))
-    return
+    return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
 def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
@@ -212,6 +235,86 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
     return
 
 
+def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', k=5, data='disco'):
+    """
+    VGG-based crowd estimation from multi-channel audio signals with Cross-Validation
+    :param input_folder:
+    :param output_folder:
+    :param epoch:
+    :param vgg:
+    :param batch_norm:
+    :param ch:
+    :param k:
+    :param data:
+    :return:
+    """
+    y, x = read_disco_data2(input_folder) if data == 'disco' else read_sim_data2(input_folder)
+    # x.shape: (frame_num, channel_num, feature_num, freq_num, time_num)
+    x_ch_idx = [CH.index(c) for c in ch]
+    sorted(x_ch_idx)
+    x = x[:, :, x_ch_idx, :, :]
+    x = torch.cat([x[:, c, :, :, :] for c in range(x.size()[1])], dim=1)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    kf = KFold(n_splits=k, shuffle=True, random_state=0)
+    target, output = [], []
+    for cv, (tr_idx, ts_idx) in enumerate(kf.split(x, y)):
+        model = None
+        if vgg == 11:
+            model = vgg11(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        elif vgg == 13:
+            model = vgg13(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        elif vgg == 16:
+            model = vgg16(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        elif vgg == 19:
+            model = vgg19(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        else:
+            Exception('input vgg=11, 13, 16 or 19.')
+
+        train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
+        test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32)
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+        criterion = nn.MSELoss()
+
+        print(f'[Cross-validation: {cv}]: # of train data = {len(tr_idx)}, # of test data = {len(ts_idx)}')
+        train_loss, test_loss = [], []
+        for e in range(epoch):
+            tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, e)
+            ts_loss_tmp = model_test(model, test_dataloader, criterion, e)
+            train_loss.append(tr_loss_tmp)
+            test_loss.append(ts_loss_tmp)
+
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        view_loss(train_loss, test_loss, f'{output_folder}/loss_fold{cv}.png')
+        torch.save(model.state_dict(), f'{output_folder}/model_fold{cv}.pth')
+
+        target_np, output_np = model_predict(model, test_dataloader)
+        scatter_plot(target_np[:, 0], output_np[:, 0], f'{output_folder}/scatter_log_fold{cv}.png')
+        target_np = np.exp(target_np[:, 0]) - 1
+        output_np = np.exp(output_np[:, 0]) - 1
+        scatter_plot(target_np, output_np, f'{output_folder}/scatter_fold{cv}.png')
+        calculate_accuracy(target_np, output_np, f'{output_folder}/accuracy_fold{cv}.json')
+        target.append(target_np)
+        output.append(output_np)
+
+        target_np_close, output_np_close = model_predict(model, train_dataloader)
+        scatter_plot(target_np_close[:, 0], output_np_close[:, 0],
+                     f'{output_folder}/train_scatter_log_fold{cv}.png')
+        target_np_close = np.exp(target_np_close[:, 0]) - 1
+        output_np_close = np.exp(output_np_close[:, 0]) - 1
+        scatter_plot(target_np_close, output_np_close, f'{output_folder}/train_scatter_fold{cv}.png')
+        calculate_accuracy(target_np_close, output_np_close, f'{output_folder}/train_accuracy_fold{cv}.json')
+    target = np.concatenate(target)
+    output = np.concatenate(output)
+    scatter_plot(target, output, f'{output_folder}/all_scatter.png')
+    calculate_accuracy(target, output, f'{output_folder}/all_accuracy.json')
+    return
+
 def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', data='disco'):
     y, x = read_disco_data(input_folder) if data == 'disco' else read_sim_data(input_folder)
     x_ch_idx = [CH.index(c) for c in ch]
@@ -281,6 +384,6 @@ if __name__ == '__main__':
         vgg_training(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
                      args.feature, args.data)
     elif args.option == 'cv':
-        vgg_training_cv(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
-                        args.feature, 5, args.data)
+        vgg_training_cv2(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
+                         args.feature, 5, args.data)
 
