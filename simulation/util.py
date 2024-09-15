@@ -499,19 +499,65 @@ class CrowdSim:
                                      't': ts['t'], 'x': ts['x'], 'y': ts['y'], 'z': ts['z'],
                                      'sound_index': ts['sound_index']}
                                     for psi in self.person_sound_info for ts in psi['time_series']])
-        return
+        tmp_df['group'] = (tmp_df['t'] / duration).astype(int)
+        sim_param_group = [{'group': g, 'foot_tag': gr_df['foot_tag'].tolist(), 't': gr_df['t'].tolist(),
+                            'x': gr_df['x'].tolist(), 'y': gr_df['y'].tolist(), 'z': gr_df['z'].tolist(),
+                            'sound_index': gr_df['sound_index'].tolist(), 'offset': gr_df['t'].min(),
+                            'size': len(gr_df)}
+                           for g, gr_df in tmp_df.groupby('group')]
+
+        def _sim_group(index):
+            sim_param = sim_param_group[index]
+            room = self.create_room()
+            for i in range(sim_param['size']):
+                p = [sim_param['x'][i], sim_param['y'][i], sim_param['z'][i]]
+                sig = self.foot_sound.get_wav(sim_param['foot_tag'][i], sim_param['sound_index'][i])
+                if room.is_inside(p):
+                    room.add_source(position=p, signal=sig, delay=sim_param['t'][i] - sim_param['offset'])
+            simulated_sound = np.zeros([room.n_mics, 1])
+            if room.n_sources > 0:
+                room.simulate()
+                simulated_sound = room.mic_array.signals
+            result = {'delay': int(room.fs * sim_param['offset']), 'signal': simulated_sound,
+                      'group': sim_param['group']}
+            return result
+
+        res_list = Parallel(n_jobs=-1)(delayed(_sim_group)(i) for i in tqdm(range(len(sim_param_group))))
+        # res_list = [self.__sim_group(sp) for sp in tqdm(sim_param_group)]
+        signal_size = max([r['delay'] + r['signal'].shape[1] for r in res_list])
+        channel = res_list[0]['signal'].shape[0]
+        sim_result = np.zeros([channel, signal_size])
+        for r in res_list:
+            each_size = r['signal'].shape[1]
+            sim_result[:, r['delay']:r['delay']+each_size] += r['signal']
+        return sim_result
+
+    def __sim_group(self, sim_param):
+        room = self.create_room()
+        for i in range(sim_param['size']):
+            p = [sim_param['x'][i], sim_param['y'][i], sim_param['z'][i]]
+            sig = self.foot_sound.get_wav(sim_param['foot_tag'][i], sim_param['sound_index'][i])
+            if room.is_inside(p):
+                room.add_source(position=p, signal=sig, delay=sim_param['t'][i]-sim_param['offset'])
+        simulated_sound = np.zeros([room.n_mics, 1])
+        if room.n_sources > 0:
+            room.simulate()
+            simulated_sound = room.mic_array.signals
+        result = {'delay': int(room.fs * sim_param['offset']), 'signal': simulated_sound, 'group': sim_param['group']}
+        return result
 
     def simulation(self, multi_process=True):
         print(f'# of people: {len(self.crowd_list)}')
         if multi_process:
             print(f'multi_process: {multi_process}')
-            people_sound = Parallel(n_jobs=-1)(delayed(self.person_sim)(i) for i in tqdm(range(len(self.crowd_list))))
-            ch = people_sound[0].shape[0]
-            audio_size = max([ps.shape[1] for ps in people_sound])
-            sim_result = np.zeros((ch, audio_size))
-            for ps in people_sound:
-                sim_result[:, :ps.shape[1]] += ps
-            return sim_result
+            return self.multi_process_simulation(duration=10.0)
+            # people_sound = Parallel(n_jobs=-1)(delayed(self.person_sim)(i) for i in tqdm(range(len(self.crowd_list))))
+            # ch = people_sound[0].shape[0]
+            # audio_size = max([ps.shape[1] for ps in people_sound])
+            # sim_result = np.zeros((ch, audio_size))
+            # for ps in people_sound:
+            #     sim_result[:, :ps.shape[1]] += ps
+            # return sim_result
         else:
             print(f'multi_process: {multi_process}')
             people_sound = [self.person_sim(i) for i in tqdm(range(len(self.crowd_list)))]
@@ -624,6 +670,12 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
     if mic_json is None:
         mic_location = np.array([[room_center[0], room_center[1], 0.8],
                                  # [room_center[0] + 0.01, room_center[1], 0.8],
+                                 [room_center[0], room_center[1] - 5.0, 0.8],
+                                 [room_center[0], room_center[1] + 5.0, 0.8],
+                                 [room_center[0] - 30.0, room_center[1] - 5.0, 0.8],
+                                 [room_center[0] - 30.0, room_center[1] + 5.0, 0.8],
+                                 [room_center[0] + 30.0, room_center[1] - 5.0, 0.8],
+                                 [room_center[0] + 30.0, room_center[1] + 5.0, 0.8],
                                  [room_center[0] - 30.0, room_center[1], 0.8],
                                  [room_center[0] + 30.0, room_center[1], 0.8]])
         crowd_sim.set_microphone(mic_location)
@@ -636,7 +688,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
         print(f'Create folder: {output_folder}')
         os.makedirs(output_folder)
     print('Simulation start.')
-    signals = crowd_sim.simulation(multi_process=False)
+    signals = crowd_sim.simulation(multi_process=True)
     signals = signals / signals.max()
     for s in range(len(signals)):
         wavfile.write(f'{output_folder}/sim{s}.wav', SR, signals[s])

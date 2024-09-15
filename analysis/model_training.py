@@ -71,12 +71,12 @@ def read_sim_data2(folder):
         xx.append(feature['x'])
         # xx: list of x (element num: channel)
         # x: np.array(frame_index x feature_num x freq x time)
-    y = np.log(yy[0] + 1)
+    y = np.log(yy[0] + 1)[:862]
     x = np.stack(xx)
     x = (x - x.flatten().mean()) / x.flatten().std()
     # x.shape: (channel_num, frame_num, feature_num, freq_num, time_num)
     # -> (frame_num, channel_num, feature_num, freq_num, time_num)
-    x = np.transpose(x, (1, 0, 2, 3, 4))
+    x = np.transpose(x, (1, 0, 2, 3, 4))[:862, :, :, :, :]
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
@@ -254,20 +254,22 @@ def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=Fals
     sorted(x_ch_idx)
     x = x[:, :, x_ch_idx, :, :]
     x = torch.cat([x[:, c, :, :, :] for c in range(x.size()[1])], dim=1)
+    # x.shape: (frame_num, channel_num*feature_num, freq_num, time_num)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    channel_num = x.size()[1]
 
     kf = KFold(n_splits=k, shuffle=True, random_state=0)
     target, output = [], []
     for cv, (tr_idx, ts_idx) in enumerate(kf.split(x, y)):
         model = None
         if vgg == 11:
-            model = vgg11(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg11(in_channel=channel_num, batch_norm=batch_norm).to(device)
         elif vgg == 13:
-            model = vgg13(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg13(in_channel=channel_num, batch_norm=batch_norm).to(device)
         elif vgg == 16:
-            model = vgg16(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg16(in_channel=channel_num, batch_norm=batch_norm).to(device)
         elif vgg == 19:
-            model = vgg19(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg19(in_channel=channel_num, batch_norm=batch_norm).to(device)
         else:
             Exception('input vgg=11, 13, 16 or 19.')
 
@@ -314,6 +316,7 @@ def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=Fals
     scatter_plot(target, output, f'{output_folder}/all_scatter.png')
     calculate_accuracy(target, output, f'{output_folder}/all_accuracy.json')
     return
+
 
 def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', data='disco'):
     y, x = read_disco_data(input_folder) if data == 'disco' else read_sim_data(input_folder)
