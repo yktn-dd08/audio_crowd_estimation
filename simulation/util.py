@@ -7,6 +7,8 @@ import librosa
 import pandas as pd
 import torch
 import shapely
+import logging
+from rich.logging import RichHandler
 import wave as wave
 import numpy as np
 import pyroomacoustics as pra
@@ -29,6 +31,15 @@ SR = 16000
 ROOM_SIZE = np.array([10.0, 10.0, 3.0])
 MIC_INTERVAL = 0.02
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='Line %(lineno)d: %(name)s: %(message)s',
+    # datefmt='[%Y-%m-%d ]',
+    handlers=[RichHandler(markup=True, rich_tracebacks=True)]
+)
+logger = logging.getLogger('simulation.util')
+logging.getLogger('numba').setLevel(logging.CRITICAL)
+
 
 class Data:
     CMU = 'cmu_arctic'
@@ -38,6 +49,7 @@ class Data:
         path = f'{INPUT_DIR}/{Data.CMU}'
         if not os.path.exists(path):
             os.makedirs(path)
+            logger.debug(msg=f'{path} created.')
             if console_out:
                 print(f'Created folder: {path}')
         pra.datasets.CMUArcticCorpus(basedir=path, download=True)
@@ -225,6 +237,7 @@ class SimOld:
 class Crowd:
     @classmethod
     def csv_to_crowd_list(cls, filename):
+        logger.info(f'read csv - {filename}')
         df = pd.read_csv(filename)
         df['start_time'] = pd.to_datetime(df['start_time'])
         df['geom'] = df['geom'].apply(lambda x: wkt.loads(x))
@@ -339,8 +352,10 @@ class FootstepSound:
         self.folder_list = glob.glob(f'{FootstepSound.FOLDER}/*')
         self.file_dict = {os.path.basename(fl): glob.glob(f'{fl}/*.wav') for fl in self.folder_list}
         self.wav_tag = list(self.file_dict.keys())
+        logging.basicConfig(level=logging.CRITICAL)
         self.wav_dict = {tag: [FootstepSound.__read_wav_file(f, self.fs) for f in files]
                          for tag, files in self.file_dict.items()}
+        logging.basicConfig(level=logging.DEBUG)
 
     @staticmethod
     def __read_wav_file(filename, fs):
@@ -368,6 +383,7 @@ class FootstepSound:
 class CrowdSim:
     @classmethod
     def from_shp(cls, shp_path):
+        logger.info(msg=f'read shp - {shp_path}')
         df = gpd.read_file(shp_path)
         room_polygon = df['geometry'].loc[0]
         return cls(room_polygon=room_polygon, height=3.0)
@@ -380,6 +396,7 @@ class CrowdSim:
         self.room_height = height
         self.mic_info = None
         self.foot_sound = FootstepSound(sampling_rate=SR)
+
         # self.foot_tags = []  # setting the foot tag for each person
         self.person_sound_info = [{}]  # setting the sound information(trajectory, foot tag and footstep index)
 
@@ -547,9 +564,9 @@ class CrowdSim:
         return result
 
     def simulation(self, multi_process=True):
-        print(f'# of people: {len(self.crowd_list)}')
+        logger.info(f'audio simulation start - {len(self.crowd_list)} people')
+        logger.info(f'multi_process - {multi_process}')
         if multi_process:
-            print(f'multi_process: {multi_process}')
             return self.multi_process_simulation(duration=10.0)
             # people_sound = Parallel(n_jobs=-1)(delayed(self.person_sim)(i) for i in tqdm(range(len(self.crowd_list))))
             # ch = people_sound[0].shape[0]
@@ -559,7 +576,6 @@ class CrowdSim:
             #     sim_result[:, :ps.shape[1]] += ps
             # return sim_result
         else:
-            print(f'multi_process: {multi_process}')
             people_sound = [self.person_sim(i) for i in tqdm(range(len(self.crowd_list)))]
             ch = people_sound[0].shape[0]
             audio_size = max([ps.shape[1] for ps in people_sound])
@@ -639,16 +655,19 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
         }
     }
 
-    print('Reading Crowd CSV.')
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
     log_info['crowd_csv'] = crowd_csv
-    print(f'[# of people] {len(crowd_list)}')
-    print(f'[Simulation time] {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
-    print(f'[Crowd footstep] {min([c.foot_step for c in crowd_list])} - {max([c.foot_step for c in crowd_list])}')
+    logger.info(f'simulation time: {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
+    # print(f'[# of people] {len(crowd_list)}')
+    # print(f'[Simulation time] {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
+    # print(f'[Crowd footstep] {min([c.foot_step for c in crowd_list])} - {max([c.foot_step for c in crowd_list])}')
 
-    print('Reading Simulation room shapefile.')
+    # print('Reading Simulation room shapefile.')
     crowd_sim = CrowdSim.from_shp(room_shp)
-    print(f'[Room info]: {crowd_sim.room_info}')
+    for i, corner in enumerate(crowd_sim.room_info['corners'].T):
+        logger.info(f'corner {i} - {corner.tolist()}')
+    logger.info('sampling rate - ' + str(crowd_sim.room_info['fs']))
+    logger.info('max_order - ' + str(crowd_sim.room_info['max_order']))
     crowd_sim.set_crowd(crowd_list)
     room_center = crowd_sim.room_info['corners'].mean(axis=1)
 
@@ -680,20 +699,21 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
                                  [room_center[0] + 30.0, room_center[1], 0.8]])
         crowd_sim.set_microphone(mic_location)
         log_info['sim_info']['mic_locations'] = mic_location.tolist()
+        for i, mic in enumerate(mic_location.tolist()):
+            logger.info(f'microphone {i} - {mic}')
 
     else:
         pass
 
     if not os.path.exists(output_folder):
-        print(f'Create folder: {output_folder}')
         os.makedirs(output_folder)
-    print('Simulation start.')
     signals = crowd_sim.simulation(multi_process=True)
     signals = signals / signals.max()
     for s in range(len(signals)):
+        logger.info(f'save wav file - {output_folder}/sim{s}.wav')
         wavfile.write(f'{output_folder}/sim{s}.wav', SR, signals[s])
 
-    print('Writing crowd density CSV.')
+    logger.info(f'save crowd csv - {output_folder}/crowd.csv')
     crowd_sim.crowd_density_to_csv(f'{output_folder}/crowd.csv')
     with open(f'{output_folder}/log.json', 'w', encoding='utf-8') as f:
         json.dump(log_info, f)
