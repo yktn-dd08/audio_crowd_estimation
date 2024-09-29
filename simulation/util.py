@@ -38,7 +38,8 @@ logging.basicConfig(
     handlers=[RichHandler(markup=True, rich_tracebacks=True)]
 )
 logger = logging.getLogger('simulation.util')
-logging.getLogger('numba').setLevel(logging.CRITICAL)
+for mod in ['numba', 'matplotlib']:
+    logging.getLogger(mod).setLevel(logging.CRITICAL)
 
 
 class Data:
@@ -352,10 +353,8 @@ class FootstepSound:
         self.folder_list = glob.glob(f'{FootstepSound.FOLDER}/*')
         self.file_dict = {os.path.basename(fl): glob.glob(f'{fl}/*.wav') for fl in self.folder_list}
         self.wav_tag = list(self.file_dict.keys())
-        logging.basicConfig(level=logging.CRITICAL)
         self.wav_dict = {tag: [FootstepSound.__read_wav_file(f, self.fs) for f in files]
                          for tag, files in self.file_dict.items()}
-        logging.basicConfig(level=logging.DEBUG)
 
     @staticmethod
     def __read_wav_file(filename, fs):
@@ -449,6 +448,17 @@ class CrowdSim:
 
     def person_sim(self, index):
         """
+        Get audio signal for footstep of person {index}
+        Parameters
+        ----------
+        index: index of person
+
+        Returns audio signal
+        -------
+        # TODO 一人の移動時間が長い場合にメモリエラーが出るため、pyroomacousticsのシミュレーションを分割する必要あり
+
+        """
+        """
         {
                 'id': i,
                 'foot_tag': foot_tags[i],
@@ -467,14 +477,6 @@ class CrowdSim:
         if self.crowd_list is None:
             Exception('Not set crowd data.')
         room = self.create_room()
-        # person_info = self.person_sound_info[index]
-        # offset_time = min([ts['t'] for ts in person_info['time_series']])
-        # for ts in person_info['time_series']:
-        #     p = [ts['x'], ts['y'], ts['z']]
-        #     if room.is_inside(p):
-        #         room.add_source(position=p,
-        #                         signal=self.foot_sound.get_wav(person_info['foot_tag'], ts['sound_index']),
-        #                         delay=ts['t']-offset_time)
         person_footstep = self.footstep[index]
         foot_tag = self.foot_sound.get_tags()[0]
         offset_time = min([foot['t'] for foot in person_footstep])
@@ -539,7 +541,8 @@ class CrowdSim:
                       'group': sim_param['group']}
             return result
 
-        res_list = Parallel(n_jobs=-1)(delayed(_sim_group)(i) for i in tqdm(range(len(sim_param_group))))
+        res_list = Parallel(n_jobs=-1)(delayed(_sim_group)(i) for i in tqdm(range(len(sim_param_group)),
+                                                                            desc='[Audio crowd simulation]'))
         # res_list = [self.__sim_group(sp) for sp in tqdm(sim_param_group)]
         signal_size = max([r['delay'] + r['signal'].shape[1] for r in res_list])
         channel = res_list[0]['signal'].shape[0]
@@ -708,6 +711,8 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     signals = crowd_sim.simulation(multi_process=True)
+    # add noise
+
     signals = signals / signals.max()
     for s in range(len(signals)):
         logger.info(f'save wav file - {output_folder}/sim{s}.wav')

@@ -15,3 +15,5 @@ joblib
 torch
 torchvision
 torchaudio
+pydantic
+rich
