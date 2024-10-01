@@ -378,6 +378,9 @@ class FootstepSound:
     def get_tags(self):
         return self.wav_tag
 
+    def get_foot_std(self, tag):
+        return np.array([w.std() for w in self.wav_dict[tag]]).mean()
+
 
 class CrowdSim:
     @classmethod
@@ -587,6 +590,12 @@ class CrowdSim:
                 sim_result[:, :ps.shape[1]] += ps
             return sim_result
 
+    def generate_noise_std(self, snr):
+        # TODO ここはwav_tagの割合でうまく調整する予定
+        sigma_s = self.foot_sound.get_foot_std(self.foot_sound.wav_tag[0])
+        sigma_n = sigma_s * (10 ** (-snr / 20))
+        return sigma_n
+
     def save_footstep_shp(self, filename):
         # TODO
         return
@@ -648,7 +657,7 @@ def test():
     return
 
 
-def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
+def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None, snr=None):
     log_info = {
         'arg_info': {
             'crowd_csv': crowd_csv,
@@ -661,9 +670,6 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
     log_info['crowd_csv'] = crowd_csv
     logger.info(f'simulation time: {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
-    # print(f'[# of people] {len(crowd_list)}')
-    # print(f'[Simulation time] {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
-    # print(f'[Crowd footstep] {min([c.foot_step for c in crowd_list])} - {max([c.foot_step for c in crowd_list])}')
 
     # print('Reading Simulation room shapefile.')
     crowd_sim = CrowdSim.from_shp(room_shp)
@@ -712,6 +718,9 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
         os.makedirs(output_folder)
     signals = crowd_sim.simulation(multi_process=True)
     # add noise
+    if snr is not None:
+        sigma_n = crowd_sim.generate_noise_std(snr=snr)
+        signals += np.random.normal(0.0, sigma_n, size=signals.shape)
 
     signals = signals / signals.max()
     for s in range(len(signals)):
@@ -721,7 +730,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None):
     logger.info(f'save crowd csv - {output_folder}/crowd.csv')
     crowd_sim.crowd_density_to_csv(f'{output_folder}/crowd.csv')
     with open(f'{output_folder}/log.json', 'w', encoding='utf-8') as f:
-        json.dump(log_info, f)
+        json.dump(log_info, f, indent=4)
     return
 
 
@@ -731,8 +740,9 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--room-shp')
     parser.add_argument('-o', '--output-folder')
     parser.add_argument('-m', '--mic-json')
+    parser.add_argument('-n', '--snr', default=None, type=float)
     parser.add_argument('-opt', '--option', choices=['footstep', 'env'],
                         default='footstep')
     args = parser.parse_args()
     if args.option == 'footstep':
-        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder)
+        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder, None, args.snr)
