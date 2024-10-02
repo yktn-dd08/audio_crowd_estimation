@@ -657,13 +657,13 @@ def test():
     return
 
 
-def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None, snr=None):
+def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None):
     log_info = {
         'arg_info': {
             'crowd_csv': crowd_csv,
             'room_shp': room_shp,
             'output_folder': output_folder,
-            'mic_json': 'None' if mic_json is None else mic_json
+            'mic_json': 'None' if mic_shp is None else mic_shp
         }
     }
 
@@ -695,7 +695,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_json=None, sn
         'sampling_rate': crowd_sim.room_info['fs'],
         'max_order': crowd_sim.room_info['max_order']
     }
-    if mic_json is None:
+    if mic_shp is None:
         mic_location = np.array([[room_center[0], room_center[1], 0.8],
                                  # [room_center[0] + 0.01, room_center[1], 0.8],
                                  [room_center[0], room_center[1] - 5.0, 0.8],
@@ -739,7 +739,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--crowd-csv')
     parser.add_argument('-s', '--room-shp')
     parser.add_argument('-o', '--output-folder')
-    parser.add_argument('-m', '--mic-json')
+    parser.add_argument('-m', '--mic-shp')
     parser.add_argument('-n', '--snr', default=None, type=float)
     parser.add_argument('-opt', '--option', choices=['footstep', 'env'],
                         default='footstep')

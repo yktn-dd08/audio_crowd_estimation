@@ -28,7 +28,7 @@ def each_feat_calc(crowd, signal, fs, index):
     return y, feat
 
 
-def calculate_feature(input_folder, output_folder):
+def calculate_feature_old(input_folder, output_folder):
     crowd = pd.read_csv(f'{input_folder}/crowd.csv')
     wav_list = glob.glob(f'{input_folder}/sim*.wav')
     for i, w in enumerate(wav_list):
@@ -42,6 +42,10 @@ def calculate_feature(input_folder, output_folder):
             os.makedirs(output_folder)
         with open(f'{output_folder}/feature{i}.pickle', 'wb') as f:
             pickle.dump(feature, f)
+    return
+
+
+def calculate_feature(input_folder, output_folder, duration):
     return
 
 
@@ -118,9 +122,10 @@ if __name__ == '__main__':
     parser.add_argument('-opt', '--option', type=str, choices=['plot', 'feature'], default='plot')
     parser.add_argument('-i', '--input-folder', type=str)
     parser.add_argument('-o', '--output-folder', type=str)
+    parser.add_argument('-s', '--duration', type=float, default=1.0)
     args = parser.parse_args()
     if args.option == 'plot':
         sim_plot(args.input_folder, args.output_folder)
     elif args.option == 'feature':
-        calculate_feature(args.input_folder, args.output_folder)
+        calculate_feature_old(args.input_folder, args.output_folder)
     pass
