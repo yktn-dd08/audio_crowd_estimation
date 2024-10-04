@@ -6,6 +6,17 @@ from sqlalchemy import create_engine
 from shapely import line_merge
 from shapely.geometry import MultiLineString
 from joblib import Parallel, delayed
+import logging
+from rich.logging import RichHandler
+
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='Line %(lineno)d: %(name)s: %(message)s',
+    # datefmt='[%Y-%m-%d ]',
+    handlers=[RichHandler(markup=True, rich_tracebacks=True)]
+)
+logger = logging.getLogger(__name__)
 
 
 def get_person_trajectory(table_name, id, conn):
@@ -57,13 +68,15 @@ def load_trj_df(pg_url, table_name, start_time, end_time, distance=5):
     having st_length(st_linemerge(st_collect(line order by start_time))) > {distance};'''
 
     with create_engine(pg_url).connect() as conn:
-        print('Reading postgis data.')
+        logger.info(f'SQL - {sql.replace("¥n", "").replace("    ", " ")}')
         df = gpd.read_postgis(sql=sql, con=conn, geom_col='geom')
         out_df = df.loc[df['wkt'].apply(lambda x: not x.startswith('MULTI'))]
         out_df = out_df[['id', 'start_time', 'geom']]
+        logger.info(f'Got LINESTRING of {len(out_df)} people.')
         id_list = df['id'].loc[df['wkt'].apply(lambda x: x.startswith('MULTI'))].tolist()
 
         # prc_list = Parallel(n_jobs=-1)(delayed(get_person_trajectory)(table_name, i, conn) for i in tqdm(id_list))
+        logger.info(f'Postprocessing - merging MULTILINESTRING into LINESTRING for {len(id_list)} people.')
         prc_list = [get_person_trajectory(table_name, i, conn) for i in tqdm(id_list)]
         prc_df = pd.concat(prc_list, axis=0)
         out_df = pd.concat([out_df, prc_df], axis=0).reset_index().drop('index', axis=1)
@@ -89,6 +102,8 @@ if __name__ == '__main__':
     parser.add_argument('-dw', '--db-pw', type=str, default='postgres')
     parser.add_argument('-dn', '--db-name', type=str, default='marunouchi1')
     parser.add_argument('-lo', '--layout', type=str, default='marunouchi')
+    parser.add_argument('-st', '--start-time', nargs=2, type=str)
+    parser.add_argument('-et', '--end-time', nargs=2, type=str)
     args = parser.parse_args()
 
     _pg_url = f'postgresql://{args.db_user}:{args.db_pw}@{args.db_host}:{args.db_port}/{args.db_name}'
