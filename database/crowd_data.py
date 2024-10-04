@@ -1,4 +1,7 @@
 import argparse
+import os.path
+import time
+
 import pandas as pd
 import geopandas as gpd
 from tqdm import tqdm
@@ -43,7 +46,7 @@ def get_person_trajectory(table_name, id, conn):
     return o_df
 
 
-def load_trj_df(pg_url, table_name, start_time, end_time, distance=5):
+def load_trj_df(pg_url, table_name, start_time, end_time, roi_wkt, distance=5):
     """
     Load trajectory data as GeoPandas DataFrame from PostgreSQL+PostGIS
     Parameters
@@ -52,34 +55,62 @@ def load_trj_df(pg_url, table_name, start_time, end_time, distance=5):
     table_name: table name of people flow data
     start_time: start time for data extraction
     end_time: end time for data extraction
+    roi_wkt: wkt of ROI for data extraction
     distance: walking distance threshold for data extraction
 
     Returns GeoPandas DataFrame (column: id, t, geom: Linestring)
     -------
     """
+    t_where = 'start_time '
+    if start_time is None:
+        if end_time is None:
+            t_where = ''
+        else:
+            t_where += f'<= \'{end_time}\''
+    else:
+        if end_time is None:
+            t_where += f'>= \'{start_time}\''
+        else:
+            t_where += f'BETWEEN \'{start_time}\' AND \'{end_time}\''
+    r_where = '' if roi_wkt is None else f'ST_Contains(\'{roi_wkt}\'::geometry, line)'
+    where = 'WHERE '
+    if t_where == '':
+        if r_where == '':
+            where = ''
+        else:
+            where += r_where
+    else:
+        if r_where == '':
+            where += t_where
+        else:
+            where += r_where + ' AND ' + t_where
 
-    t_where = f'start_time between \'{start_time}\' and \'{end_time}\''
+    logger.info(f'time range: {start_time} - {end_time}')
+    logger.info(f'roi range: {roi_wkt}')
 
-    sql = f'''select id, min(start_time) as start_time, max(end_time) as end_time,
-    st_linemerge(st_collect(line order by start_time)) as geom,
-    st_astext(st_linemerge(st_collect(line order by start_time))) as wkt,
-    st_length(st_linemerge(st_collect(line order by start_time))) as len
-    from {table_name} where {t_where} group by id
-    having st_length(st_linemerge(st_collect(line order by start_time))) > {distance};'''
+    sql = f'''SELECT id, MIN(start_time) AS start_time, MAX(end_time) AS end_time,
+    ST_LineMerge(ST_Collect(line ORDER BY start_time)) AS geom,
+    ST_AsText(ST_LineMerge(ST_Collect(line ORDER BY start_time))) AS wkt,
+    ST_Length(ST_LineMerge(ST_Collect(line ORDER BY start_time))) AS len
+    FROM {table_name} {where} GROUP BY id
+    HAVING ST_Length(ST_LineMerge(ST_Collect(line ORDER BY start_time))) > {distance};'''
 
     with create_engine(pg_url).connect() as conn:
-        logger.info(f'SQL - {sql.replace("¥n", "").replace("    ", " ")}')
+        logger.info(f'SQL - {sql.replace("\n", "").replace("    ", " ")}')
+        s = time.time()
         df = gpd.read_postgis(sql=sql, con=conn, geom_col='geom')
+        logger.info(f'SQL Result - Acquired {len(df)} records - Execution time: {time.time() - s} sec.')
         out_df = df.loc[df['wkt'].apply(lambda x: not x.startswith('MULTI'))]
         out_df = out_df[['id', 'start_time', 'geom']]
-        logger.info(f'Got LINESTRING of {len(out_df)} people.')
+        logger.info(f'Acquired LINESTRING of {len(out_df)} people.')
         id_list = df['id'].loc[df['wkt'].apply(lambda x: x.startswith('MULTI'))].tolist()
 
-        # prc_list = Parallel(n_jobs=-1)(delayed(get_person_trajectory)(table_name, i, conn) for i in tqdm(id_list))
-        logger.info(f'Postprocessing - merging MULTILINESTRING into LINESTRING for {len(id_list)} people.')
-        prc_list = [get_person_trajectory(table_name, i, conn) for i in tqdm(id_list)]
-        prc_df = pd.concat(prc_list, axis=0)
-        out_df = pd.concat([out_df, prc_df], axis=0).reset_index().drop('index', axis=1)
+        if len(id_list) > 0:
+            # prc_list = Parallel(n_jobs=-1)(delayed(get_person_trajectory)(table_name, i, conn) for i in tqdm(id_list))
+            logger.info(f'Need postprocess to merge MULTILINESTRING into LINESTRING for {len(id_list)} people.')
+            prc_list = [get_person_trajectory(table_name, i, conn) for i in tqdm(id_list, desc='[Postprocess]')]
+            prc_df = pd.concat(prc_list, axis=0)
+            out_df = pd.concat([out_df, prc_df], axis=0).reset_index().drop('index', axis=1)
 
     return out_df
 
@@ -91,10 +122,29 @@ def set_crowd_data(trj_df):
     return
 
 
+def get_roi_wkt(roi_shp):
+    df = gpd.read_file(roi_shp)
+    geom = df['geometry'].loc[0]
+    return geom.wkt
+
+
+def export_trj_csv(pg_url, table_name, start_time, end_time, roi_shp, output_csv):
+    if isinstance(start_time, list):
+        start_time = f'{start_time[0]} {start_time[1]}'
+    if isinstance(end_time, list):
+        end_time = f'{end_time[0]} {end_time[1]}'
+    trj_df = load_trj_df(pg_url, table_name, start_time, end_time,
+                         None if roi_shp is None else get_roi_wkt(roi_shp))
+    folder = os.path.dirname(output_csv)
+    os.makedirs(folder, exist_ok=True)
+    trj_df.to_csv(output_csv, index=False)
+    return
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # parser.add_argument('-opt', '--option', type=str, choices=['vel', 'stay'])
-    parser.add_argument('-of', '--output-folder', type=str)
+    parser.add_argument('-opt', '--option', type=str, choices=['export'], default='export')
+    parser.add_argument('-oc', '--output-csv', type=str)
 
     parser.add_argument('-dh', '--db-host', type=str, default='localhost')
     parser.add_argument('-dp', '--db-port', type=int, default=5432)
@@ -104,8 +154,9 @@ if __name__ == '__main__':
     parser.add_argument('-lo', '--layout', type=str, default='marunouchi')
     parser.add_argument('-st', '--start-time', nargs=2, type=str)
     parser.add_argument('-et', '--end-time', nargs=2, type=str)
+    parser.add_argument('-rs', '--roi-shp', type=str, default=None)
     args = parser.parse_args()
 
     _pg_url = f'postgresql://{args.db_user}:{args.db_pw}@{args.db_host}:{args.db_port}/{args.db_name}'
-    trj_df = load_trj_df(_pg_url, args.layout+'_model', '2020-08-08 00:00:00','2020-08-09 00:00:00')
-    trj_df.to_csv('./test.csv')
+    if args.option == 'export':
+        export_trj_csv(_pg_url, args.layout + '_model', args.start_time, args.end_time, args.roi_shp, args.output_csv)
