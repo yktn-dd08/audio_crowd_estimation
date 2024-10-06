@@ -7,8 +7,6 @@ import librosa
 import pandas as pd
 import torch
 import shapely
-import logging
-from rich.logging import RichHandler
 import wave as wave
 import numpy as np
 import pyroomacoustics as pra
@@ -20,6 +18,7 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import split
 from joblib import Parallel, delayed
 from tqdm import tqdm
+from common.logger import get_logger
 
 
 INPUT_DIR = './data/speech'
@@ -31,15 +30,16 @@ SR = 16000
 ROOM_SIZE = np.array([10.0, 10.0, 3.0])
 MIC_INTERVAL = 0.02
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='Line %(lineno)d: %(name)s: %(message)s',
-    # datefmt='[%Y-%m-%d ]',
-    handlers=[RichHandler(markup=True, rich_tracebacks=True)]
-)
-logger = logging.getLogger('simulation.util')
-for mod in ['numba', 'matplotlib']:
-    logging.getLogger(mod).setLevel(logging.CRITICAL)
+# logging.basicConfig(
+#     level=logging.DEBUG,
+#     format='Line %(lineno)d: %(name)s: %(message)s',
+#     # datefmt='[%Y-%m-%d ]',
+#     handlers=[RichHandler(markup=True, rich_tracebacks=True)]
+# )
+# logger = logging.getLogger('simulation.util')
+# for mod in ['numba', 'matplotlib']:
+#     logging.getLogger(mod).setLevel(logging.CRITICAL)
+logger = get_logger('simulation.util')
 
 
 class Data:
