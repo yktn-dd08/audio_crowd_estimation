@@ -33,7 +33,7 @@ def get_person_trajectory(table_name, _id, conn, where):
                 # in case of merging LineString
                 tmp['coordinates'].extend(dr['line'].coords[1:])
             else:
-                tmp['line'] = LineString(tmp['coordinates'])
+                tmp['geom'] = LineString(tmp['coordinates'])
                 data_list.append(tmp)
                 tmp = {'start_time': dr['start_time'], 'coordinates': list(dr['line'].coords)}
             #     pass
@@ -147,7 +147,8 @@ def load_trj_df(pg_url, table_name, start_time, end_time, roi_wkt, distance=5):
         if len(id_list) > 0:
             # prc_list = Parallel(n_jobs=-1)(delayed(get_person_trajectory)(table_name, i, conn) for i in tqdm(id_list))
             logger.info(f'Need postprocess to merge MULTILINESTRING into LINESTRING for {len(id_list)} people.')
-            prc_list = [get_person_trajectory(table_name, i, conn, where) for i in tqdm(id_list, desc='[Postprocess]')]
+            prc_list = [get_person_trajectory(table_name, i, conn, get_where(start_time, end_time, roi_wkt))
+                        for i in tqdm(id_list, desc='[Postprocess]')]
             prc_df = pd.concat(prc_list, axis=0)
             out_df = pd.concat([out_df, prc_df], axis=0).reset_index().drop('index', axis=1)
 

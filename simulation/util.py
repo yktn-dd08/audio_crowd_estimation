@@ -239,7 +239,7 @@ class Crowd:
     @classmethod
     def csv_to_crowd_list(cls, filename):
         logger.info(f'read csv - {filename}')
-        df = pd.read_csv(filename)
+        df = pd.read_csv(filename).dropna()
         df['start_time'] = pd.to_datetime(df['start_time'])
         df['geom'] = df['geom'].apply(lambda x: wkt.loads(x))
         start_time = df['start_time'].min()
@@ -393,6 +393,7 @@ class CrowdSim:
     def __init__(self, room_polygon: Polygon, height=3.0):
         self.crowd_list = None
         self.footstep = []
+        self.room_polygon = room_polygon
         room_coordinates = np.array(room_polygon.exterior.coords[:-1])
         self.room_info = {'corners': room_coordinates.T, 'fs': SR, 'max_order': 0}
         self.room_height = height
@@ -414,6 +415,7 @@ class CrowdSim:
 
     def set_crowd(self, crowd_list: list[Crowd]):
         self.crowd_list = crowd_list
+        # TODO ここが時間かかるので将来的にマルチプロセスにする必要あり
         self.footstep = [crowd.get_foot_points() for crowd in self.crowd_list]
         foot_tags = [self.foot_sound.get_tags()[0] for _ in self.crowd_list]
         self.person_sound_info = [
@@ -437,9 +439,15 @@ class CrowdSim:
 
     def set_microphone(self, mic_loc: np.array):
         """
-        set the locations of multiple microphones
-        :param mic_loc: numpy.array(mic_num x 3)
-        :return:
+        Set the locations of multiple microphones.
+        Parameters
+        ----------
+        mic_loc
+        numpy.array(mic_num x 3)
+
+        Returns
+        -------
+
         """
         mic_loc_tmp = mic_loc
         if mic_loc.shape[1] == 2:
@@ -619,6 +627,37 @@ class CrowdSim:
         plt.cla()
         return
 
+    def get_person_moving_features(self, index):
+        """
+        Get GeoDataFrame of index-th person as Moving Features Format (id, t, geometry)
+
+        Parameters
+        ----------
+        index: index of person.
+
+        Returns
+        -------
+        GeoDataFrame
+        """
+        crowd = self.crowd_list[index]
+        line = crowd.path.coords
+        record_num = len(line)
+        df = gpd.GeoDataFrame({'t': [crowd.start_time + crowd.time_step * r for r in range(record_num - 1)]},
+                              geometry=[LineString([line[r], line[r + 1]]) for r in range(record_num - 1)])
+        df['id'] = index
+        return df
+
+    def decomposed_moving_feature(self, verbose=True):
+        """
+        Get GeoDataFrame of all people as Moving Features Format (id, t, geometry)
+        Returns
+        -------
+        GeoDataFrame
+        """
+        crowd_df = pd.concat([self.get_person_moving_features(index)
+                              for index in tqdm(range(len(self.crowd_list)), disable=not verbose)])
+        return crowd_df
+
     def crowd_density_to_csv(self, csv_name):
         duration = int(max([c.start_time + c.duration for c in self.crowd_list]))
         crowd_density = np.zeros(duration)
@@ -630,6 +669,65 @@ class CrowdSim:
         df.to_csv(csv_name, index=False)
         return
 
+    def crowd_density_from_each_mic(self, mic_index: int, csv_name: str, distance_list: list, time_step=1.0,
+                                    verbose=True):
+        mic_geom = Point(self.mic_info[mic_index][0:2])
+        max_time_index = int(max([c.start_time + c.duration for c in self.crowd_list]) / time_step) + 1
+
+        out_df = pd.DataFrame(np.zeros((max_time_index, len(distance_list) + 1)),
+                              columns=['count'] + [f'distance_{d}' for d in distance_list],
+                              index=[t for t in range(max_time_index)])
+        out_df.index.name = 'time_index'
+
+        for i in tqdm(range(len(self.crowd_list)), desc='[Crowd Counting]', disable=not verbose):
+            trj_df = self.get_person_moving_features(i)
+            trj_df['time_index'] = (trj_df['t'] / time_step).astype(int)
+            trj_df['distance'] = trj_df['geometry'].apply(lambda x: Point(x.coords[0]).distance(mic_geom))
+            trj_df['count'] = 1.0
+            for d in distance_list:
+                trj_df[f'distance_{d}'] = trj_df['distance'].apply(lambda x: 1 if x < d else 0)
+            trj_df = trj_df[['time_index', 'count'] + [f'distance_{d}' for d in distance_list]].set_index('time_index')
+            out_df.loc[trj_df.index] += trj_df.loc[trj_df.index]
+
+        out_df = out_df.astype(int).reset_index()
+        out_df['t'] = out_df['time_index'] * time_step
+        folder = os.path.dirname(csv_name)
+        os.makedirs(folder, exist_ok=True)
+        out_df.to_csv(csv_name, index=False)
+        return
+"""
+from simulation.util import *
+crowd_list = Crowd.csv_to_crowd_list('./data/gis/marunouchi/crowd/roi1_crowd0807_15.csv')
+crowd_sim = CrowdSim.from_shp('./data/gis/marunouchi/roi/marunouchi_roi1.shp')
+mic_shp = './data/gis/marunouchi/mic/marunouchi_mic30.shp'
+crowd_sim.set_crowd(crowd_list)
+
+df = gpd.read_file(mic_shp)
+id_list = [dr['id'] for _, dr in df.iterrows() if crowd_sim.room_polygon.contains(dr['geometry'])]
+mic_location = np.array([[dr['geometry'].x, dr['geometry'].y, dr['height']]
+                         for _, dr in df.iterrows() if crowd_sim.room_polygon.contains(dr['geometry'])])
+crowd_sim.set_microphone(mic_location)
+
+mic_index = 0
+time_step = 1.0
+distance_list = [20, 40, 60, 80, 100, 1000]
+mic_geom = Point(crowd_sim.mic_info[mic_index][0:2])
+max_time_index = int(max([c.start_time + c.duration for c in crowd_sim.crowd_list]) / time_step) + 1
+
+out_df = pd.DataFrame(np.zeros((max_time_index, len(distance_list))),
+                      columns=[f'distance_{d}' for d in distance_list],
+                      index=[t for t in range(max_time_index)])
+out_df.index.name = 'time_index'
+
+for i in tqdm(range(len(crowd_sim.crowd_list))):
+    trj_df = crowd_sim.get_person_moving_features(i)
+    trj_df['time_index'] = (trj_df['t'] / time_step).astype(int)
+    trj_df['distance'] = trj_df['geometry'].apply(lambda x: Point(x.coords[0]).distance(mic_geom))
+    for d in distance_list:
+        trj_df[f'distance_{d}'] = trj_df['distance'].apply(lambda x: 1 if x < d else 0)
+    trj_df = trj_df[['time_index'] + [f'distance_{d}' for d in distance_list]].set_index('time_index')
+    out_df.loc[trj_df.index] += trj_df.loc[trj_df.index]
+"""
 
 def test():
     crowd_list = Crowd.csv_to_crowd_list('./workspace/gis/test_light.csv')
@@ -695,24 +793,21 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
         'sampling_rate': crowd_sim.room_info['fs'],
         'max_order': crowd_sim.room_info['max_order']
     }
+
     if mic_shp is None:
-        mic_location = np.array([[room_center[0], room_center[1], 0.8],
-                                 # [room_center[0] + 0.01, room_center[1], 0.8],
-                                 [room_center[0], room_center[1] - 5.0, 0.8],
-                                 [room_center[0], room_center[1] + 5.0, 0.8],
-                                 [room_center[0] - 30.0, room_center[1] - 5.0, 0.8],
-                                 [room_center[0] - 30.0, room_center[1] + 5.0, 0.8],
-                                 [room_center[0] + 30.0, room_center[1] - 5.0, 0.8],
-                                 [room_center[0] + 30.0, room_center[1] + 5.0, 0.8],
-                                 [room_center[0] - 30.0, room_center[1], 0.8],
-                                 [room_center[0] + 30.0, room_center[1], 0.8]])
-        crowd_sim.set_microphone(mic_location)
+        id_list = [0]
+        mic_location = np.array([[room_center[0], room_center[1], 0.05]])
         log_info['sim_info']['mic_locations'] = mic_location.tolist()
-        for i, mic in enumerate(mic_location.tolist()):
-            logger.info(f'microphone {i} - {mic}')
 
     else:
+        df = gpd.read_file(mic_shp)
+        id_list = [dr['id'] for _, dr in df.iterrows() if crowd_sim.room_polygon.contains(dr['geometry'])]
+        mic_location = np.array([[dr['geometry'].x, dr['geometry'].y, dr['height']]
+                                 for _, dr in df.iterrows() if crowd_sim.room_polygon.contains(dr['geometry'])])
         pass
+    crowd_sim.set_microphone(mic_location)
+    for i, mic in enumerate(mic_location.tolist()):
+        logger.info(f'microphone {i} - {mic}')
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -724,13 +819,19 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
 
     signals = signals / signals.max()
     for s in range(len(signals)):
-        logger.info(f'save wav file - {output_folder}/sim{s}.wav')
-        wavfile.write(f'{output_folder}/sim{s}.wav', SR, signals[s])
+        logger.info(f'save wav file - {output_folder}/sim_mic{id_list[s]}.wav')
+        wavfile.write(f'{output_folder}/sim_mic{id_list[s]}.wav', SR, signals[s])
 
+    # save crowd with each range
     logger.info(f'save crowd csv - {output_folder}/crowd.csv')
     crowd_sim.crowd_density_to_csv(f'{output_folder}/crowd.csv')
-    with open(f'{output_folder}/log.json', 'w', encoding='utf-8') as f:
-        json.dump(log_info, f, indent=4)
+    for s in range(len(signals)):
+        logger.info(f'save crowd from mic{id_list[s]} - {output_folder}/crowd_mic{id_list[s]}.csv')
+        crowd_sim.crowd_density_from_each_mic(mic_index=id_list[s],
+                                              csv_name=f'{output_folder}/crowd_mic{id_list[s]}.csv',
+                                              distance_list=[1, 10, 20, 30, 40, 50])
+    # with open(f'{output_folder}/log.json', 'w', encoding='utf-8') as f:
+    #     json.dump(log_info, f, indent=4)
     return
 
 
@@ -745,4 +846,4 @@ if __name__ == '__main__':
                         default='footstep')
     args = parser.parse_args()
     if args.option == 'footstep':
-        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder, None, args.snr)
+        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder, args.mic_shp, args.snr)
