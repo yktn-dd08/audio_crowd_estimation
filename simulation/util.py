@@ -756,62 +756,35 @@ def test():
 
 
 def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None):
-    log_info = {
-        'arg_info': {
-            'crowd_csv': crowd_csv,
-            'room_shp': room_shp,
-            'output_folder': output_folder,
-            'mic_json': 'None' if mic_shp is None else mic_shp
-        }
-    }
-
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
-    log_info['crowd_csv'] = crowd_csv
     logger.info(f'simulation time: {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
 
     # print('Reading Simulation room shapefile.')
     crowd_sim = CrowdSim.from_shp(room_shp)
     for i, corner in enumerate(crowd_sim.room_info['corners'].T):
-        logger.info(f'corner {i} - {corner.tolist()}')
+        logger.debug(f'corner {i} - {corner.tolist()}')
     logger.info('sampling rate - ' + str(crowd_sim.room_info['fs']))
     logger.info('max_order - ' + str(crowd_sim.room_info['max_order']))
     crowd_sim.set_crowd(crowd_list)
     room_center = crowd_sim.room_info['corners'].mean(axis=1)
 
-    log_info['sim_info'] = {
-        'crowd_num': len(crowd_list),
-        'simulation_time': {
-            'start_time': min([c.start_time for c in crowd_list]),
-            'end_time': max([c.start_time for c in crowd_list])
-        },
-        'footstep': {
-            'min': min([c.foot_step for c in crowd_list]),
-            'max': max([c.foot_step for c in crowd_list])
-        },
-        'room_corners': crowd_sim.room_info['corners'].tolist(),
-        'room_height': crowd_sim.room_height,
-        'sampling_rate': crowd_sim.room_info['fs'],
-        'max_order': crowd_sim.room_info['max_order']
-    }
-
     if mic_shp is None:
         id_list = [0]
         mic_location = np.array([[room_center[0], room_center[1], 0.05]])
-        log_info['sim_info']['mic_locations'] = mic_location.tolist()
 
     else:
         df = gpd.read_file(mic_shp)
         id_list = [dr['id'] for _, dr in df.iterrows() if crowd_sim.room_polygon.contains(dr['geometry'])]
         mic_location = np.array([[dr['geometry'].x, dr['geometry'].y, dr['height']]
                                  for _, dr in df.iterrows() if crowd_sim.room_polygon.contains(dr['geometry'])])
-        pass
     crowd_sim.set_microphone(mic_location)
     for i, mic in enumerate(mic_location.tolist()):
-        logger.info(f'microphone {i} - {mic}')
+        logger.debug(f'microphone {i} - {mic}')
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     signals = crowd_sim.simulation(multi_process=True)
+
     # add noise
     if snr is not None:
         sigma_n = crowd_sim.generate_noise_std(snr=snr)
@@ -819,16 +792,16 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
 
     signals = signals / signals.max()
     for s in range(len(signals)):
-        logger.info(f'save wav file - {output_folder}/sim_mic{id_list[s]}.wav')
-        wavfile.write(f'{output_folder}/sim_mic{id_list[s]}.wav', SR, signals[s])
+        logger.info(f'save wav file - {output_folder}/sim_mic{id_list[s]:04}.wav')
+        wavfile.write(f'{output_folder}/sim_mic{id_list[s]:04}.wav', SR, signals[s])
 
     # save crowd with each range
     logger.info(f'save crowd csv - {output_folder}/crowd.csv')
     crowd_sim.crowd_density_to_csv(f'{output_folder}/crowd.csv')
     for s in range(len(signals)):
-        logger.info(f'save crowd from mic{id_list[s]} - {output_folder}/crowd_mic{id_list[s]}.csv')
+        logger.info(f'save crowd from mic{id_list[s]} - {output_folder}/crowd_mic{id_list[s]:04}.csv')
         crowd_sim.crowd_density_from_each_mic(mic_index=id_list[s],
-                                              csv_name=f'{output_folder}/crowd_mic{id_list[s]}.csv',
+                                              csv_name=f'{output_folder}/crowd_mic{id_list[s]:04}.csv',
                                               distance_list=[1, 10, 20, 30, 40, 50])
     # with open(f'{output_folder}/log.json', 'w', encoding='utf-8') as f:
     #     json.dump(log_info, f, indent=4)

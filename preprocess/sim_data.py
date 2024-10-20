@@ -12,7 +12,32 @@ from joblib import Parallel, delayed
 from librosa.feature import melspectrogram
 
 
-def each_feat_calc(crowd, signal, fs, index):
+MEL_EPS = 1.0e-35
+
+def hpss_feature(signal, fs, feat='ohvp'):
+    hpss2s = hpss.twostageHPSS(samprate=fs)
+    ll = len(signal)
+    ms = np.max(signal)
+    h, v, p = hpss2s(signal/ms)
+    h = h[0:ll] * ms if len(h) > ll else np.concatenate([h * ms, np.zeros(ll - len(h))])
+    v = v[0:ll] * ms if len(v) > ll else np.concatenate([v * ms, np.zeros(ll - len(v))])
+    p = p[0:ll] * ms if len(p) > ll else np.concatenate([p * ms, np.zeros(ll - len(p))])
+    res = []
+    for f in feat:
+        if f == 'o':
+            res.append(f)
+        elif f == 'h':
+            res.append(h)
+        elif f == 'v':
+            res.append(v)
+        elif f == 'p':
+            res.append(p)
+        else:
+            raise Exception('feat must include "ohvp"')
+    return res
+
+
+def each_feat_calc_old(crowd, signal, fs, index):
     y = crowd['crowd'].loc[index]
     tmp = signal[int(fs*index):int(fs*(index+1))]
     s = np.zeros(fs)
@@ -24,7 +49,7 @@ def each_feat_calc(crowd, signal, fs, index):
     h = h[0:ll] * ms if len(h) > ll else np.concatenate([h * ms, np.zeros(ll - len(h))])
     v = v[0:ll] * ms if len(v) > ll else np.concatenate([v * ms, np.zeros(ll - len(v))])
     p = p[0:ll] * ms if len(p) > ll else np.concatenate([p * ms, np.zeros(ll - len(p))])
-    feat = np.stack([np.log10(melspectrogram(y=d, sr=fs)+1.0e-35) for d in [s, h, v, p]])
+    feat = np.stack([np.log10(melspectrogram(y=d, sr=fs)+MEL_EPS) for d in [s, h, v, p]])
     return y, feat
 
 
@@ -34,7 +59,7 @@ def calculate_feature_old(input_folder, output_folder):
     for i, w in enumerate(wav_list):
         fs, signal = wavfile.read(w)
         # signal += (np.random.random(len(signal)) * 2.0 - 1.0) * 1.0e-35
-        xy = [each_feat_calc(crowd, signal, fs, t) for t in tqdm(range(len(crowd)))]
+        xy = [each_feat_calc_old(crowd, signal, fs, t) for t in tqdm(range(len(crowd)))]
         y = np.array([f[0] for f in xy])
         x = np.stack([f[1] for f in xy])
         feature = {'y': y, 'x': x}
@@ -45,7 +70,30 @@ def calculate_feature_old(input_folder, output_folder):
     return
 
 
-def calculate_feature(input_folder, output_folder, duration):
+def calculate_log_mel_feature(input_folder, output_folder, duration=1.0, step=1.0, feat=None):
+    wav_list = glob.glob(f'{input_folder}/sim_mic*.wav')
+    csv_list = glob.glob(f'{input_folder}/crowd_mic*.csv')
+    sorted(wav_list)
+    sorted(csv_list)
+    assert len(wav_list) == len(csv_list), f'File Error: # of wav is {len(wav_list)}, # of csv is {len(csv_list)}'
+
+    frame_shift = int(step * fs)
+    frame_num = int(duration * fs)
+
+    for i, (wav_path, csv_path) in enumerate(zip(wav_list, csv_list)):
+        fs, signal = wavfile.read(wav_path)
+        crowd_mic = pd.read_csv(csv_path)
+
+        for t_idx in np.arange(0, len(signal), frame_shift):
+            signal_sub = signal[t_idx:t_idx+frame_num]
+            if feat is None:
+                log_mel = np.log10(melspectrogram(y=signal_sub, sr=fs) + MEL_EPS)[np.newaxis]
+            else:
+                feature = hpss_feature(signal_sub, fs, feat)
+                log_mel = np.stack([np.log10(melspectrogram(y=d, sr=fs) + MEL_EPS) for d in feature])
+
+
+        pass
     return
 
 
@@ -54,6 +102,7 @@ def calculate_feature_mp(input_folder, output_folder):
     wav_list = glob.glob(f'{input_folder}/sim*.wav')
     for i, w in enumerate(wav_list):
         fs, signal = wavfile.read(w)
+
         def _each_feat_calc(index):
             y = crowd['crowd'].loc[index]
             tmp = signal[int(fs * index):int(fs * (index + 1))]
