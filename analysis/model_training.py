@@ -80,6 +80,10 @@ def read_sim_data2(folder):
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
+def read_sim_data3(input_folder):
+    return
+
+
 def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
     model.train()
     train_loss = 0

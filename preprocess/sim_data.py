@@ -70,6 +70,51 @@ def calculate_feature_old(input_folder, output_folder):
     return
 
 
+def calculate_crowd_with_duration(crowd_df, start_time, end_time):
+    col_list = [col for col in crowd_df.columns if col != 't' and col != 'time_index']
+    time = 0.0
+    crowd = {col: 0.0 for col in col_list}
+
+    ext_df = crowd_df[(start_time <= crowd_df['t']) & (crowd_df['t'] < end_time)].sort_values('t')
+    ext_before = crowd_df[crowd_df['t'] < start_time]
+    ext_after = crowd_df[crowd_df['t'] >= end_time]
+
+    # in case of no record filtered
+    if len(ext_df) == 0:
+        tmp = crowd_df.loc[[ext_before.idxmax()['t']]]
+        tmp['t'] = start_time
+        ext_df = pd.concat([ext_df, tmp], axis=0)
+
+    # counting crowd at start_time
+    if len(ext_before) > 0 and ext_df['t'].min() > start_time:
+        tmp = crowd_df.loc[[ext_before.idxmax()['t']]]
+        tmp['t'] = start_time
+        ext_df = pd.concat([ext_df, tmp], axis=0)
+    elif len(ext_before) > 0 and ext_df['t'].min() > start_time:
+        tmp = pd.DataFrame([{col: 0.0 for col in ext_df.columns}])
+        tmp['t'] = start_time
+        ext_df = pd.concat([ext_df, tmp], axis=0)
+
+    # counting crowd at end_time
+    if len(ext_after) > 0:
+        tmp = crowd_df.loc[[ext_after.idxmin()['t']]]
+        tmp['t'] = end_time
+        ext_df = pd.concat([ext_df, tmp], axis=0)
+    else:
+        tmp = pd.DataFrame([{col: 0.0 for col in ext_df.columns}])
+        tmp['t'] = end_time
+        ext_df = pd.concat([ext_df, tmp], axis=0)
+    ext_df = ext_df.sort_values('t').reset_index(drop=True)
+
+    # calculating weighted crowd number
+    for i in range(len(ext_df) - 1):
+        delta_t = ext_df.iloc[i + 1]['t'] - ext_df.iloc[i]['t']
+        time += delta_t
+        for col in col_list:
+            crowd[col] += delta_t * ext_df.iloc[i][col]
+    return {k: v / time for k, v in crowd.items()}
+
+
 def calculate_log_mel_feature(input_folder, output_folder, duration=1.0, step=1.0, feat=None):
     wav_list = glob.glob(f'{input_folder}/sim_mic*.wav')
     csv_list = glob.glob(f'{input_folder}/crowd_mic*.csv')
@@ -77,23 +122,38 @@ def calculate_log_mel_feature(input_folder, output_folder, duration=1.0, step=1.
     sorted(csv_list)
     assert len(wav_list) == len(csv_list), f'File Error: # of wav is {len(wav_list)}, # of csv is {len(csv_list)}'
 
+    fs, _ = wavfile.read(wav_list[0])
+
     frame_shift = int(step * fs)
     frame_num = int(duration * fs)
+    result = []
 
     for i, (wav_path, csv_path) in enumerate(zip(wav_list, csv_list)):
         fs, signal = wavfile.read(wav_path)
         crowd_mic = pd.read_csv(csv_path)
 
-        for t_idx in np.arange(0, len(signal), frame_shift):
+        feature_array = []
+        crowd_array = []
+        for t_idx in tqdm(np.arange(0, len(signal), frame_shift), desc=f'[microphone {i}/{len(wav_list)}]'):
             signal_sub = signal[t_idx:t_idx+frame_num]
             if feat is None:
                 log_mel = np.log10(melspectrogram(y=signal_sub, sr=fs) + MEL_EPS)[np.newaxis]
+                feature_array.append(log_mel)
             else:
                 feature = hpss_feature(signal_sub, fs, feat)
                 log_mel = np.stack([np.log10(melspectrogram(y=d, sr=fs) + MEL_EPS) for d in feature])
+                feature_array.append(log_mel)
 
-
-        pass
+            crowd_dict = calculate_crowd_with_duration(crowd_mic,
+                                                       start_time=t_idx / fs,
+                                                       end_time=(t_idx + frame_num) / fs)
+            crowd_array.append(crowd_dict)
+        result.append({'microphone': i, 'crowd': crowd_array, 'feature': feature_array,
+                       'csv_path': csv_path, 'wav_path': wav_path})
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    with open(f'{output_folder}/feature.pickle', 'wb') as f:
+        pickle.dump(result, f)
     return
 
 
@@ -176,5 +236,6 @@ if __name__ == '__main__':
     if args.option == 'plot':
         sim_plot(args.input_folder, args.output_folder)
     elif args.option == 'feature':
-        calculate_feature_old(args.input_folder, args.output_folder)
+        calculate_log_mel_feature(args.input_folder, args.output_folder, args.duration, args.duration)
+        # calculate_feature_old(args.input_folder, args.output_folder)
     pass
