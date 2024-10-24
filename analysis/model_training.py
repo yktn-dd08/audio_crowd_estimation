@@ -13,9 +13,11 @@ from tqdm import tqdm
 from preprocess.disco_data import read_merged_data
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+from common.logger import get_logger
 
 
 CH = ['l', 'h', 'v', 'p']
+logger = get_logger('analysis.model_training')
 
 
 def read_disco_data(folder):
@@ -76,11 +78,22 @@ def read_sim_data2(folder):
     x = (x - x.flatten().mean()) / x.flatten().std()
     # x.shape: (channel_num, frame_num, feature_num, freq_num, time_num)
     # -> (frame_num, channel_num, feature_num, freq_num, time_num)
-    x = np.transpose(x, (1, 0, 2, 3, 4))[:862, :, :, :, :]
+    x = np.transpose(x, (1, 0, 2, 3, 4))
     return torch.FloatTensor(y[:, np.newaxis]), torch.FloatTensor(x)
 
 
-def read_sim_data3(input_folder):
+def read_sim_data3(input_folder, mic_id_list=None):
+    with open(f'{input_folder}/feature.pickle', 'rb') as f:
+        feature = pickle.load(f)
+    logger.info(f'read {input_folder}/feature.pickle - # of channels: {len(feature)}')
+    if mic_id_list is not None:
+        feature = [f for f in feature if f['microphone'] in mic_id_list]
+        logger.info(f'extract feature subset - # of extracted channels: {len(feature)}')
+    y = np.array([c['count'] for c in feature[0]['crowd']])
+    return
+
+
+def read_sim_data_with_distance(input_folder, mic_id):
     return
 
 
