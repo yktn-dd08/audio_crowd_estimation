@@ -3,6 +3,7 @@ import json
 import os.path
 import pickle
 import argparse
+import time
 
 import matplotlib.pyplot as plt
 import torch
@@ -12,9 +13,9 @@ from model.vgg_cnn import *
 from tqdm import tqdm
 from preprocess.disco_data import read_merged_data
 from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 from common.logger import get_logger
-
 
 CH = ['l', 'h', 'v', 'p']
 logger = get_logger('analysis.model_training')
@@ -83,18 +84,92 @@ def read_sim_data2(folder):
 
 
 def read_sim_data3(input_folder, mic_id_list=None):
+    """
+    read features of simulated signals (multi-channel) with any time duration
+
+    Parameters
+    ----------
+    input_folder: str
+        Folder path of feature.pickle
+
+    mic_id_list: list (default: None)
+        Microphone ID list which you want to extract from pickle file
+
+    Returns
+    -------
+    y: numpy.array (frame_num x 1)
+        crowd number at each frame
+
+    x: numpy.array (frame_num x channel_num x feature_num x freq_num x time_num)
+        feature at each frame
+    """
     with open(f'{input_folder}/feature.pickle', 'rb') as f:
         feature = pickle.load(f)
     logger.info(f'read {input_folder}/feature.pickle - # of channels: {len(feature)}')
     if mic_id_list is not None:
         feature = [f for f in feature if f['microphone'] in mic_id_list]
         logger.info(f'extract feature subset - # of extracted channels: {len(feature)}')
-    y = np.array([c['count'] for c in feature[0]['crowd']])
-    return
+    channel_num = len(feature)
+    frame_num = len(feature[0]['feature'])
+    shape = feature[0]['feature'][0].shape  # shape: (feature_num x freq_num x time_num)
+    if feature[0]['feature'][frame_num - 1].shape != shape:
+        # In case that feature at last frame has different size, exclude it.
+        frame_num -= 1
+    # x = np.stack([np.stack([feature[cn]['feature'][fn] for cn in range(channel_num)]) for fn in range(frame_num)])
+    y = np.array([c['count'] for c in feature[0]['crowd']])[0:frame_num, np.newaxis]
+    x = np.array([[feature[cn]['feature'][fn] for cn in range(channel_num)] for fn in range(frame_num)])
+    return y, x
+
+
+def normalize_feature_with_scaler(y, x, standard_scaler: StandardScaler = None):
+    if standard_scaler is None:
+        standard_scaler = StandardScaler()
+        standard_scaler.fit(x.flatten()[:, np.newaxis])
+    log_y = np.log10(y + 1)
+    x_scale = (x - standard_scaler.mean_) / standard_scaler.scale_
+    return log_y, x_scale, standard_scaler
 
 
 def read_sim_data_with_distance(input_folder, mic_id):
-    return
+    """
+    read features of simulated signals (extract only one channel) with any time duration
+
+    Parameters
+    ----------
+    input_folder: str
+        Folder path of feature.pickle
+
+    mic_id: int
+        Microphone ID you want to extract
+
+    Returns
+    -------
+    y: numpy.array (frame_num x crowd_num)
+        crowd numbers at each frame. crowd numbers includes all counted number and counted number within each distance.
+
+    x: numpy.array (frame_num x feature_num x freq_num x time_num)
+        feature at each frame
+
+    col_list: list[str]
+        column list of crowd number (['count', 'distance_1', ...])
+    """
+    with open(f'{input_folder}/feature.pickle', 'rb') as f:
+        feature = pickle.load(f)
+    logger.info(f'read {input_folder}/feature.pickle - # of channels: {len(feature)}')
+    feature = [f for f in feature if f['microphone'] == mic_id]
+    logger.info(f'extract feature subset with microphone: {mic_id}')
+    col_list = list(feature[0]['crowd'][0].keys())
+    logger.info(f'crowd count list: {col_list}')
+
+    frame_num = len(feature[0]['feature'])
+    shape = feature[0]['feature'][0].shape  # shape: (feature_num x freq_num x time_num)
+    if feature[0]['feature'][frame_num - 1].shape != shape:
+        # In case that feature at last frame has different size, exclude it.
+        frame_num -= 1
+
+    y = np.array([[c[col] for col in col_list] for c in feature[0]['crowd']])[0:frame_num]
+    x = np.array([feature[0]['feature'][fn] for fn in range(frame_num)])
+    return y, x, col_list
 
 
 def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
@@ -104,7 +179,7 @@ def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
     with tqdm(train_loader, disable=not verbose) as _train_loader:
         for batch_idx, (x, y) in enumerate(_train_loader):
             _train_loader.set_description(f'[Epoch {epoch:03} - TRAIN]')
-            _train_loader.set_postfix(LOSS=train_loss_tmp, LOSS_SUM=train_loss/len(train_loader.dataset))
+            _train_loader.set_postfix(LOSS=train_loss_tmp, LOSS_SUM=train_loss / len(train_loader.dataset))
 
             optimizer.zero_grad()
             output = model(x)
@@ -125,7 +200,7 @@ def model_test(model, test_loader, criterion, epoch, verbose=True):
         with tqdm(test_loader, disable=not verbose) as _test_loader:
             for batch_idx, (x, y) in enumerate(_test_loader):
                 _test_loader.set_description(f'[Epoch {epoch:03} - TEST]')
-                _test_loader.set_postfix(LOSS=test_loss_tmp, LOSS_SUM=test_loss/len(test_loader.dataset))
+                _test_loader.set_postfix(LOSS=test_loss_tmp, LOSS_SUM=test_loss / len(test_loader.dataset))
                 output = model(x)
                 loss = criterion(output, y)
                 test_loss_tmp = loss.item()
@@ -406,4 +481,3 @@ if __name__ == '__main__':
     elif args.option == 'cv':
         vgg_training_cv2(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
                          args.feature, 5, args.data)
-
