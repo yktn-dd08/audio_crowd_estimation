@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 from common.logger import get_logger
 
-CH = ['l', 'h', 'v', 'p']
+CH = ['o', 'h', 'v', 'p']
 logger = get_logger('analysis.model_training')
 
 
@@ -105,10 +105,10 @@ def read_sim_data3(input_folder, mic_id_list=None):
     """
     with open(f'{input_folder}/feature.pickle', 'rb') as f:
         feature = pickle.load(f)
-    logger.info(f'read {input_folder}/feature.pickle - # of channels: {len(feature)}')
+    logger.info(f'read {input_folder} - # of channels: {len(feature)}')
     if mic_id_list is not None:
         feature = [f for f in feature if f['microphone'] in mic_id_list]
-        logger.info(f'extract feature subset - # of extracted channels: {len(feature)}')
+        logger.info(f'read {input_folder} - extract feature subset - # of extracted channels: {len(feature)}')
     channel_num = len(feature)
     frame_num = len(feature[0]['feature'])
     shape = feature[0]['feature'][0].shape  # shape: (feature_num x freq_num x time_num)
@@ -121,12 +121,15 @@ def read_sim_data3(input_folder, mic_id_list=None):
     return y, x
 
 
-def normalize_feature_with_scaler(y, x, standard_scaler: StandardScaler = None):
+def convert_variables_with_scaler(y, x, standard_scaler: StandardScaler = None):
+    st = time.time()
     if standard_scaler is None:
         standard_scaler = StandardScaler()
         standard_scaler.fit(x.flatten()[:, np.newaxis])
     log_y = np.log10(y + 1)
     x_scale = (x - standard_scaler.mean_) / standard_scaler.scale_
+    et = time.time()
+    logger.info(f'Convert variables - log crowd density and normalized features - {et-st} [sec]')
     return log_y, x_scale, standard_scaler
 
 
@@ -155,11 +158,11 @@ def read_sim_data_with_distance(input_folder, mic_id):
     """
     with open(f'{input_folder}/feature.pickle', 'rb') as f:
         feature = pickle.load(f)
-    logger.info(f'read {input_folder}/feature.pickle - # of channels: {len(feature)}')
+    logger.info(f'read {input_folder} - # of channels: {len(feature)}')
     feature = [f for f in feature if f['microphone'] == mic_id]
-    logger.info(f'extract feature subset with microphone: {mic_id}')
+    logger.info(f'read {input_folder} - extract feature subset with microphone: {mic_id}')
     col_list = list(feature[0]['crowd'][0].keys())
-    logger.info(f'crowd count list: {col_list}')
+    logger.info(f'read {input_folder} - crowd count list: {col_list}')
 
     frame_num = len(feature[0]['feature'])
     shape = feature[0]['feature'][0].shape  # shape: (feature_num x freq_num x time_num)
@@ -260,7 +263,7 @@ def calculate_accuracy(target_np, output_np, json_path):
     return
 
 
-def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', k=5, data='disco'):
+def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='ohvp', k=5, data='disco'):
     y, x = read_disco_data(input_folder) if data == 'disco' else read_sim_data(input_folder)
     x_ch_idx = [CH.index(c) for c in ch]
     sorted(x_ch_idx)
@@ -272,13 +275,13 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
     for cv, (tr_idx, ts_idx) in enumerate(kf.split(x, y)):
         model = None
         if vgg == 11:
-            model = vgg11(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg11(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
         elif vgg == 13:
-            model = vgg13(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg13(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
         elif vgg == 16:
-            model = vgg16(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg16(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
         elif vgg == 19:
-            model = vgg19(in_channel=len(ch), batch_norm=batch_norm).to(device)
+            model = vgg19(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
         else:
             Exception('input vgg=11, 13, 16 or 19.')
 
@@ -327,7 +330,7 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
     return
 
 
-def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', k=5, data='disco'):
+def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='ohvp', k=5, data='disco'):
     """
     VGG-based crowd estimation from multi-channel audio signals with Cross-Validation
     :param input_folder:
@@ -355,13 +358,13 @@ def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=Fals
     for cv, (tr_idx, ts_idx) in enumerate(kf.split(x, y)):
         model = None
         if vgg == 11:
-            model = vgg11(in_channel=channel_num, batch_norm=batch_norm).to(device)
+            model = vgg11(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
         elif vgg == 13:
-            model = vgg13(in_channel=channel_num, batch_norm=batch_norm).to(device)
+            model = vgg13(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
         elif vgg == 16:
-            model = vgg16(in_channel=channel_num, batch_norm=batch_norm).to(device)
+            model = vgg16(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
         elif vgg == 19:
-            model = vgg19(in_channel=channel_num, batch_norm=batch_norm).to(device)
+            model = vgg19(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
         else:
             Exception('input vgg=11, 13, 16 or 19.')
 
@@ -410,7 +413,101 @@ def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=Fals
     return
 
 
-def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='lhvp', data='disco'):
+def vgg_training_with_distance(input_folder_list, output_folder, mic_id, epoch, vgg=11, batch_norm=False, data='sim'):
+    """
+    複数フォルダ入力でモデル学習、全マイクロフォンの情報を含むfeature.pickleから学習
+    今のところは特徴量は通常のlogmelのみ
+    mic_idにてどのマイクロフォンに関するデータを学習するか
+    Parameters
+    ----------
+    input_folder_list
+    output_folder
+    mic_id
+    epoch
+    vgg
+    batch_norm
+    data
+
+    Returns
+    -------
+
+    """
+    assert data == 'sim', 'Input \'sim\' as data for now.'
+
+    # マルチプロセス用に作っているが不要かも
+    # def read_sim_wrap(index):
+    #     y, x, col_list = read_sim_data_with_distance(input_folder_list[index], mic_id)
+    #     return (y, x, col_list), index
+
+    y_list = []
+    x_list = []
+    col_list = []
+    for input_folder in input_folder_list:
+        _y, _x, _col_list = read_sim_data_with_distance(input_folder, mic_id)
+        y_list.append(_y)
+        x_list.append(_x)
+        col_list = _col_list
+    y = np.concatenate(y_list)
+    x = np.concatenate(x_list)
+    ch = x.shape[1]
+
+    y, x, sc = convert_variables_with_scaler(y, x, None)
+
+    y = torch.FloatTensor(y)
+    x = torch.FloatTensor(x)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # TODO vggishに変更
+    model = None
+    if vgg == 11:
+        model = vgg11(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
+    elif vgg == 13:
+        model = vgg13(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
+    elif vgg == 16:
+        model = vgg16(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
+    elif vgg == 19:
+        model = vgg19(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
+    else:
+        Exception('input vgg=11, 13, 16 or 19.')
+
+    tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
+    train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
+    test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32)
+
+    # TODO optunaでチューニング
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+    criterion = nn.MSELoss()
+
+    train_loss, test_loss = [], []
+    for e in range(epoch):
+        tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, e)
+        ts_loss_tmp = model_test(model, test_dataloader, criterion, e)
+        train_loss.append(tr_loss_tmp)
+        test_loss.append(ts_loss_tmp)
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    # folder = os.path.dirname()
+    view_loss(train_loss, test_loss, f'{output_folder}/loss.png')
+    torch.save(model.state_dict(), f'{output_folder}/model.pth')
+
+    info_dict = {'input_folder': input_folder_list, 'col_list': col_list,
+                 'scaler': {'mean': sc.mean_, 'std': sc.scale_}}
+    with open(f'{output_folder}/info.json', 'r') as f:
+        json.dump(info_dict, f)
+    return
+
+
+def vgg_predict_with_distance(input_folder_list, model_folder, mic_id):
+    for input_folder in input_folder_list:
+        pass
+    return
+
+
+def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, ch='ohvp', data='disco'):
     y, x = read_disco_data(input_folder) if data == 'disco' else read_sim_data(input_folder)
     x_ch_idx = [CH.index(c) for c in ch]
     sorted(x_ch_idx)
@@ -418,13 +515,13 @@ def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, c
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = None
     if vgg == 11:
-        model = vgg11(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        model = vgg11(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
     elif vgg == 13:
-        model = vgg13(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        model = vgg13(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
     elif vgg == 16:
-        model = vgg16(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        model = vgg16(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
     elif vgg == 19:
-        model = vgg19(in_channel=len(ch), batch_norm=batch_norm).to(device)
+        model = vgg19(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
     else:
         Exception('input vgg=11, 13, 16 or 19.')
 
@@ -467,17 +564,17 @@ def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, c
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-opt', '--option', type=str, default='train', choices=['train', 'cv'])
-    parser.add_argument('-i', '--input-folder', type=str)
+    parser.add_argument('-i', '--input-folder-list', type=str, nargs='+')
     parser.add_argument('-o', '--output-folder', type=str)
     parser.add_argument('-e', '--epoch', type=int, default=20)
-    parser.add_argument('-f', '--feature', type=str, default='lhvp')
+    parser.add_argument('-f', '--feature', type=str, default='ohvp')
     parser.add_argument('-v', '--vgg', type=int, default=11, choices=[11, 13, 16, 19])
     parser.add_argument('-b', '--batch-norm', type=str, default='False', choices=['True', 'False'])
     parser.add_argument('-d', '--data', type=str, default='disco', choices=['disco', 'sim'])
     args = parser.parse_args()
     if args.option == 'train':
-        vgg_training(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
+        vgg_training(args.input_folder_list[0], args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
                      args.feature, args.data)
     elif args.option == 'cv':
-        vgg_training_cv2(args.input_folder, args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
+        vgg_training_cv2(args.input_folder_list[0], args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
                          args.feature, 5, args.data)

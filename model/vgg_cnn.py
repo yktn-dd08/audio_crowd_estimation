@@ -11,7 +11,7 @@ CFGS = {
 
 
 class VGG(nn.Module):
-    def __init__(self, cfgs, in_channels, batch_norm=False, dropout=0.5, init_weights=True):
+    def __init__(self, cfgs, in_channels, out_channels=1, batch_norm=False, dropout=0.5, init_weights=True):
         super(VGG, self).__init__()
         self.features = VGG._make_layers(cfgs, in_channels, batch_norm)
         self.avepool = nn.AdaptiveAvgPool2d((7, 7))
@@ -22,7 +22,7 @@ class VGG(nn.Module):
             nn.Linear(4096, 4096),
             nn.ReLU(True),
             nn.Dropout(dropout),
-            nn.Linear(4096, 1)
+            nn.Linear(4096, out_channels)
         )
 
         if init_weights:
@@ -64,17 +64,17 @@ class VGG(nn.Module):
         return nn.Sequential(*layers)
 
 
-def vgg11(in_channel, batch_norm):
-    return VGG(CFGS['A'], in_channel, batch_norm)
+def vgg11(in_channel, out_channel, batch_norm):
+    return VGG(CFGS['A'], in_channel, out_channel, batch_norm)
 
 
-def vgg13(in_channel, batch_norm):
-    return VGG(CFGS['B'], in_channel, batch_norm)
+def vgg13(in_channel, out_channel, batch_norm):
+    return VGG(CFGS['B'], in_channel, out_channel, batch_norm)
 
 
-def vgg16(in_channel, batch_norm):
-    return VGG(CFGS['D'], in_channel, batch_norm)
+def vgg16(in_channel, out_channel, batch_norm):
+    return VGG(CFGS['D'], in_channel, out_channel, batch_norm)
 
 
-def vgg19(in_channel, batch_norm):
-    return VGG(CFGS['E'], in_channel, batch_norm)
+def vgg19(in_channel, out_channel, batch_norm):
+    return VGG(CFGS['E'], in_channel, out_channel, batch_norm)
