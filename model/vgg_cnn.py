@@ -78,3 +78,18 @@ def vgg16(in_channel, out_channel, batch_norm):
 
 def vgg19(in_channel, out_channel, batch_norm):
     return VGG(CFGS['E'], in_channel, out_channel, batch_norm)
+
+
+def vgg_model(vgg, in_channel, out_channel, batch_norm):
+    model = None
+    if vgg == 11:
+        model = vgg11(in_channel=in_channel, out_channel=out_channel, batch_norm=batch_norm)
+    elif vgg == 13:
+        model = vgg13(in_channel=in_channel, out_channel=out_channel, batch_norm=batch_norm)
+    elif vgg == 16:
+        model = vgg16(in_channel=in_channel, out_channel=out_channel, batch_norm=batch_norm)
+    elif vgg == 19:
+        model = vgg19(in_channel=in_channel, out_channel=out_channel, batch_norm=batch_norm)
+    else:
+        Exception('input vgg=11, 13, 16 or 19.')
+    return model

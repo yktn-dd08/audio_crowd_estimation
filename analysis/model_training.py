@@ -6,6 +6,7 @@ import argparse
 import time
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import torch
 import torch.nn as nn
 import numpy as np
@@ -213,14 +214,20 @@ def model_test(model, test_loader, criterion, epoch, verbose=True):
 
 def model_predict(model, test_loader, verbose=True):
     model.eval()
-    target_np = np.empty([0, 1])
-    output_np = np.empty([0, 1])
+    target_list = []
+    output_list = []
+    # target_np = np.empty([0, 1])
+    # output_np = np.empty([0, 1])
     with torch.no_grad():
         with tqdm(test_loader, disable=not verbose) as _test_loader:
             for batch_idx, (x, y) in enumerate(_test_loader):
                 output = model(x)
-                target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
-                output_np = np.concatenate([output_np, output.to('cpu').detach().numpy()], axis=0)
+                target_list.append(y.to('cpu').detach().numpy())
+                output_list.append(output.to('cpu').detach().numpy())
+                # target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
+                # output_np = np.concatenate([output_np, output.to('cpu').detach().numpy()], axis=0)
+    target_np = np.concatenate(target_list, axis=0)
+    output_np = np.concatenate(output_list, axis=0)
     return target_np, output_np
 
 
@@ -273,17 +280,7 @@ def vgg_training_cv(input_folder, output_folder, epoch, vgg=11, batch_norm=False
     kf = KFold(n_splits=k, shuffle=True, random_state=0)
     target, output = [], []
     for cv, (tr_idx, ts_idx) in enumerate(kf.split(x, y)):
-        model = None
-        if vgg == 11:
-            model = vgg11(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-        elif vgg == 13:
-            model = vgg13(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-        elif vgg == 16:
-            model = vgg16(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-        elif vgg == 19:
-            model = vgg19(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-        else:
-            Exception('input vgg=11, 13, 16 or 19.')
+        model = vgg_model(vgg, len(ch), 1, batch_norm).to(device)
 
         train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
         test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
@@ -356,17 +353,7 @@ def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=Fals
     kf = KFold(n_splits=k, shuffle=True, random_state=0)
     target, output = [], []
     for cv, (tr_idx, ts_idx) in enumerate(kf.split(x, y)):
-        model = None
-        if vgg == 11:
-            model = vgg11(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
-        elif vgg == 13:
-            model = vgg13(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
-        elif vgg == 16:
-            model = vgg16(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
-        elif vgg == 19:
-            model = vgg19(in_channel=channel_num, out_channel=1, batch_norm=batch_norm).to(device)
-        else:
-            Exception('input vgg=11, 13, 16 or 19.')
+        model = vgg_model(vgg, channel_num, 1, batch_norm).to(device)
 
         train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
         test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
@@ -413,7 +400,7 @@ def vgg_training_cv2(input_folder, output_folder, epoch, vgg=11, batch_norm=Fals
     return
 
 
-def vgg_training_with_distance(input_folder_list, output_folder, mic_id, epoch, vgg=11, batch_norm=False, data='sim'):
+def vgg_training_with_distance(input_folder_list, model_folder, mic_id, epoch, vgg=11, batch_norm=False, data='sim'):
     """
     複数フォルダ入力でモデル学習、全マイクロフォンの情報を含むfeature.pickleから学習
     今のところは特徴量は通常のlogmelのみ
@@ -421,7 +408,7 @@ def vgg_training_with_distance(input_folder_list, output_folder, mic_id, epoch, 
     Parameters
     ----------
     input_folder_list
-    output_folder
+    model_folder
     mic_id
     epoch
     vgg
@@ -459,17 +446,7 @@ def vgg_training_with_distance(input_folder_list, output_folder, mic_id, epoch, 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # TODO vggishに変更
-    model = None
-    if vgg == 11:
-        model = vgg11(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
-    elif vgg == 13:
-        model = vgg13(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
-    elif vgg == 16:
-        model = vgg16(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
-    elif vgg == 19:
-        model = vgg19(in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
-    else:
-        Exception('input vgg=11, 13, 16 or 19.')
+    model = vgg_model(vgg=vgg, in_channel=ch, out_channel=len(col_list), batch_norm=batch_norm).to(device)
 
     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
     train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
@@ -488,22 +465,67 @@ def vgg_training_with_distance(input_folder_list, output_folder, mic_id, epoch, 
         train_loss.append(tr_loss_tmp)
         test_loss.append(ts_loss_tmp)
 
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    if not os.path.exists(model_folder):
+        os.makedirs(model_folder)
     # folder = os.path.dirname()
-    view_loss(train_loss, test_loss, f'{output_folder}/loss.png')
-    torch.save(model.state_dict(), f'{output_folder}/model.pth')
+    view_loss(train_loss, test_loss, f'{model_folder}/loss.png')
+    torch.save(model.state_dict(), f'{model_folder}/model.pth')
+
+    target_np, output_np = model_predict(model, test_dataloader)
+    target_np = np.exp(target_np) - 1
+    output_np = np.exp(output_np) - 1
+    for i, col in enumerate(col_list):
+        scatter_plot(target_np[:, i], output_np[:, i], f'{model_folder}/scatter_{col}.png')
+        calculate_accuracy(target_np[:, i], output_np[:, i], f'{model_folder}/accuracy_{col}.json')
 
     info_dict = {'input_folder': input_folder_list, 'col_list': col_list,
-                 'scaler': {'mean': sc.mean_, 'std': sc.scale_}}
-    with open(f'{output_folder}/info.json', 'r') as f:
+                 'scaler': {'mean': sc.mean_, 'std': sc.scale_},
+                 'model': {'vgg': vgg, 'batch_norm': batch_norm, 'in_channel': ch, 'out_channel': len(col_list)}}
+    with open(f'{model_folder}/info.json', 'r') as f:
         json.dump(info_dict, f)
     return
 
 
 def vgg_predict_with_distance(input_folder_list, model_folder, mic_id):
+    with open(f'{model_folder}/info.json', 'w') as f:
+        info_dict = json.load(f)
+
+    scaler = StandardScaler()
+    scaler.mean_ = info_dict['scaler']['mean']
+    scaler.scale_ = info_dict['scaler']['std']
+
+    model = vgg_model(vgg=info_dict['model']['vgg'],
+                      in_channel=info_dict['model']['in_channel'],
+                      out_channel=info_dict['model']['out_channel'],
+                      batch_norm=info_dict['model']['batch_norm'])
+    model_params = torch.load(f'{model_folder}/model.pth')
+    model.load_state_dict(model_params)
+
     for input_folder in input_folder_list:
-        pass
+        st = time.time()
+        y, x, col_list = read_sim_data_with_distance(input_folder, mic_id)
+        assert len(col_list) == len(info_dict['col_list']), f'{input_folder} has different columns from training data.'
+        y, x, _ = convert_variables_with_scaler(y, x, scaler)
+
+        y = torch.FloatTensor(y)
+        x = torch.FloatTensor(x)
+        test_dataset = torch.utils.data.TensorDataset(x, y)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=32)
+
+        target_np, output_np = model_predict(model, test_dataloader)
+
+        target_np = np.exp(target_np) - 1
+        output_np = np.exp(output_np) - 1
+        output_folder = os.path.join(input_folder, 'result')
+        os.makedirs(output_folder, exist_ok=True)
+        for i, col in enumerate(col_list):
+            scatter_plot(target_np[:, i], output_np[:, i], f'{output_folder}/scatter_{col}.png')
+            calculate_accuracy(target_np[:, i], output_np[:, i], f'{output_folder}/accuracy_{col}.json')
+        target_df = pd.DataFrame(target_np, columns=col_list)
+        output_df = pd.DataFrame(output_np, columns=[f'estimated_{c}' for c in col_list])
+        pd.concat([target_df, output_df], axis=1).to_csv(f'{output_folder}/result.csv')
+        et = time.time()
+        logger.info(f'Crowd estimation finished - {input_folder} - {et - st} [sec]')
     return
 
 
@@ -513,17 +535,7 @@ def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, c
     sorted(x_ch_idx)
     x = x[:, x_ch_idx, :, :]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = None
-    if vgg == 11:
-        model = vgg11(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-    elif vgg == 13:
-        model = vgg13(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-    elif vgg == 16:
-        model = vgg16(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-    elif vgg == 19:
-        model = vgg19(in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
-    else:
-        Exception('input vgg=11, 13, 16 or 19.')
+    model = vgg_model(vgg=vgg, in_channel=len(ch), out_channel=1, batch_norm=batch_norm).to(device)
 
     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
     train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
@@ -563,8 +575,11 @@ def vgg_training(input_folder, output_folder, epoch, vgg=11, batch_norm=False, c
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-opt', '--option', type=str, default='train', choices=['train', 'cv'])
+    parser.add_argument('-opt', '--option', type=str, default='train',
+                        choices=['train', 'cv', 'train-distance', 'predict-distance'])
     parser.add_argument('-i', '--input-folder-list', type=str, nargs='+')
+    parser.add_argument('-m', '--model-folder', type=str)
+    parser.add_argument('-mi', '--mic-index', type=int)
     parser.add_argument('-o', '--output-folder', type=str)
     parser.add_argument('-e', '--epoch', type=int, default=20)
     parser.add_argument('-f', '--feature', type=str, default='ohvp')
@@ -578,3 +593,8 @@ if __name__ == '__main__':
     elif args.option == 'cv':
         vgg_training_cv2(args.input_folder_list[0], args.output_folder, args.epoch, args.vgg, args.batch_norm == 'True',
                          args.feature, 5, args.data)
+    elif args.option == 'train-distance':
+        vgg_training_with_distance(args.input_folder_list, args.model_folder, args.mic_index, args.epoch, args.vgg,
+                                   args.batch_norm == 'True', 'sim')
+    elif args.option == 'predict-distance':
+        vgg_predict_with_distance(args.input_folder_list, args.model_folder, args.mic_index)
