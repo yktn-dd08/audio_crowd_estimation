@@ -266,7 +266,7 @@ def calculate_accuracy(target_np, output_np, json_path):
            'mse': float(mean_squared_error(target_np, output_np)),
            'mape': float(mean_absolute_percentage_error(target_np, output_np))}
     with open(json_path, 'w') as f:
-        json.dump(acc, f)
+        json.dump(acc, f, indent=4)
     return
 
 
@@ -479,15 +479,15 @@ def vgg_training_with_distance(input_folder_list, model_folder, mic_id, epoch, v
         calculate_accuracy(target_np[:, i], output_np[:, i], f'{model_folder}/accuracy_{col}.json')
 
     info_dict = {'input_folder': input_folder_list, 'col_list': col_list,
-                 'scaler': {'mean': sc.mean_, 'std': sc.scale_},
+                 'scaler': {'mean': float(sc.mean_), 'std': float(sc.scale_)},
                  'model': {'vgg': vgg, 'batch_norm': batch_norm, 'in_channel': ch, 'out_channel': len(col_list)}}
-    with open(f'{model_folder}/info.json', 'r') as f:
-        json.dump(info_dict, f)
+    with open(f'{model_folder}/info.json', 'w') as f:
+        json.dump(info_dict, f, indent=4)
     return
 
 
 def vgg_predict_with_distance(input_folder_list, model_folder, mic_id):
-    with open(f'{model_folder}/info.json', 'w') as f:
+    with open(f'{model_folder}/info.json', 'r') as f:
         info_dict = json.load(f)
 
     scaler = StandardScaler()
