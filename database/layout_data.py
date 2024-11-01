@@ -129,7 +129,7 @@ if __name__ == '__main__':
     parser.add_argument('-rs', '--roi-shp', type=str, default=None)
     parser.add_argument('-xn', '--x-num', type=int, default=1)
     parser.add_argument('-yn', '--y-num', type=int, default=1)
-    parser.add_argument('-ht', '--height', type=int, default=0.05)
+    parser.add_argument('-ht', '--height', type=float, default=0.05)
     args = parser.parse_args()
 
     _pg_url = f'postgresql://{args.db_user}:{args.db_pw}@{args.db_host}:{args.db_port}/{args.db_name}'

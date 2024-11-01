@@ -755,7 +755,10 @@ def test():
     return
 
 
-def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0):
+def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0,
+                           distance_list=None):
+    if distance_list is None:
+        distance_list = [1, 10, 20, 30, 40, 50]
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
     logger.info(f'simulation time: {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
 
@@ -802,7 +805,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
         logger.info(f'save crowd from mic{id_list[s]} - {output_folder}/crowd_mic{id_list[s]:04}.csv')
         crowd_sim.crowd_density_from_each_mic(mic_index=id_list[s],
                                               csv_name=f'{output_folder}/crowd_mic{id_list[s]:04}.csv',
-                                              distance_list=[1, 10, 20, 30, 40, 50])
+                                              distance_list=distance_list)
     # with open(f'{output_folder}/log.json', 'w', encoding='utf-8') as f:
     #     json.dump(log_info, f, indent=4)
     return
@@ -818,7 +821,8 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--time-unit', default=10.0, type=float)
     parser.add_argument('-opt', '--option', choices=['footstep', 'env'],
                         default='footstep')
+    parser.add_argument('-dl', '--distance-list', nargs='+', type=int, default=[1, 10, 20, 30, 40, 50])
     args = parser.parse_args()
     if args.option == 'footstep':
         audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder, args.mic_shp, args.snr,
-                               args.time_unit)
+                               args.time_unit, args.distance_list)
