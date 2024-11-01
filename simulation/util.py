@@ -415,8 +415,15 @@ class CrowdSim:
 
     def set_crowd(self, crowd_list: list[Crowd]):
         self.crowd_list = crowd_list
-        # TODO ここが時間かかるので将来的にマルチプロセスにする必要あり
-        self.footstep = [crowd.get_foot_points() for crowd in self.crowd_list]
+        # TODO ここが時間かかるので将来的にマルチプロセスにする必要あり -> なぜかマルチプロセスの方が遅いため保留
+        #
+        # def get_foot_points_wrapper(index):
+        #     return self.crowd_list[index].get_foot_points(), index
+        #
+        # res = Parallel(n_jobs=-1)(delayed(get_foot_points_wrapper)(i) for i in range(len(crowd_list)))
+        # res.sort(key=lambda x: x[1])
+        # self.footstep = [r[0] for r in res]
+        self.footstep = [crowd.get_foot_points() for crowd in tqdm(self.crowd_list, desc='[CrowdSet')]
         foot_tags = [self.foot_sound.get_tags()[0] for _ in self.crowd_list]
         self.person_sound_info = [
             {

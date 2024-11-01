@@ -166,3 +166,4 @@ workspace/
 *.bat
 *.sh
 .DS_Store
+script/

@@ -127,7 +127,7 @@ def convert_variables_with_scaler(y, x, standard_scaler: StandardScaler = None):
     if standard_scaler is None:
         standard_scaler = StandardScaler()
         standard_scaler.fit(x.flatten()[:, np.newaxis])
-    log_y = np.log10(y + 1)
+    log_y = np.log(y + 1)
     x_scale = (x - standard_scaler.mean_) / standard_scaler.scale_
     et = time.time()
     logger.info(f'Convert variables - log crowd density and normalized features - {et-st} [sec]')
@@ -261,10 +261,10 @@ def scatter_plot(target, output, filename):
 
 
 def calculate_accuracy(target_np, output_np, json_path):
-    acc = {'corr': np.corrcoef(target_np, output_np)[0, 1],
-           'mae': mean_absolute_error(target_np, output_np),
-           'mse': mean_squared_error(target_np, output_np),
-           'mape': mean_absolute_percentage_error(target_np, output_np)}
+    acc = {'corr': float(np.corrcoef(target_np, output_np)[0, 1]),
+           'mae': float(mean_absolute_error(target_np, output_np)),
+           'mse': float(mean_squared_error(target_np, output_np)),
+           'mape': float(mean_absolute_percentage_error(target_np, output_np))}
     with open(json_path, 'w') as f:
         json.dump(acc, f)
     return
