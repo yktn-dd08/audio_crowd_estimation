@@ -577,11 +577,11 @@ class CrowdSim:
         result = {'delay': int(room.fs * sim_param['offset']), 'signal': simulated_sound, 'group': sim_param['group']}
         return result
 
-    def simulation(self, multi_process=True):
+    def simulation(self, multi_process=True, time_unit=10.0):
         logger.info(f'audio simulation start - {len(self.crowd_list)} people')
         logger.info(f'multi_process - {multi_process}')
         if multi_process:
-            return self.multi_process_simulation(duration=10.0)
+            return self.multi_process_simulation(duration=time_unit)
             # people_sound = Parallel(n_jobs=-1)(delayed(self.person_sim)(i) for i in tqdm(range(len(self.crowd_list))))
             # ch = people_sound[0].shape[0]
             # audio_size = max([ps.shape[1] for ps in people_sound])
@@ -755,7 +755,7 @@ def test():
     return
 
 
-def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None):
+def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0):
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
     logger.info(f'simulation time: {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
 
@@ -783,7 +783,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-    signals = crowd_sim.simulation(multi_process=True)
+    signals = crowd_sim.simulation(multi_process=True, time_unit=time_unit)
 
     # add noise
     if snr is not None:
@@ -815,8 +815,10 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output-folder')
     parser.add_argument('-m', '--mic-shp')
     parser.add_argument('-n', '--snr', default=None, type=float)
+    parser.add_argument('-t', '--time-unit', default=10.0, type=float)
     parser.add_argument('-opt', '--option', choices=['footstep', 'env'],
                         default='footstep')
     args = parser.parse_args()
     if args.option == 'footstep':
-        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder, args.mic_shp, args.snr)
+        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder, args.mic_shp, args.snr,
+                               args.time_unit)
