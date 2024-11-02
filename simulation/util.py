@@ -796,14 +796,22 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
     signals = crowd_sim.simulation(multi_process=True, time_unit=time_unit)
 
     # add noise
+    max_signal = np.abs(signals).max()
+
+    # 信号値はmaxで割って保存するが、これを残しておかないと複数ケースのシミュレーションを比較できない(スケールがバラバラになる)
+    signal_info = {'signal_max': float(max_signal)}
+
     if snr is not None:
         sigma_n = crowd_sim.generate_noise_std(snr=snr)
         signals += np.random.normal(0.0, sigma_n, size=signals.shape)
+        signal_info['noise_sigma'] = float(sigma_n)
 
-    signals = signals / signals.max()
+    signals = signals / max_signal
     for s in range(len(signals)):
         logger.info(f'save wav file - {output_folder}/sim_mic{id_list[s]:04}.wav')
         wavfile.write(f'{output_folder}/sim_mic{id_list[s]:04}.wav', SR, signals[s])
+    with open(f'{output_folder}/signal_info.json', 'w') as f:
+        json.dump(signal_info, f, indent=4)
 
     # save crowd with each range
     logger.info(f'save crowd csv - {output_folder}/crowd.csv')

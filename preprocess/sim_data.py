@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import pickle
 import argparse
@@ -11,8 +12,8 @@ from scipy.io import wavfile
 from joblib import Parallel, delayed
 from librosa.feature import melspectrogram
 
-
 MEL_EPS = 1.0e-35
+
 
 def hpss_feature(signal, fs, feat='ohvp'):
     hpss2s = hpss.twostageHPSS(samprate=fs)
@@ -128,9 +129,13 @@ def calculate_log_mel_feature(input_folder, output_folder, duration=1.0, step=1.
     frame_num = int(duration * fs)
     result = []
 
+    with open(f'{input_folder}/signal_info.json', 'r') as f:
+        signal_info = json.load(f)
+
     for i, (wav_path, csv_path) in enumerate(zip(wav_list, csv_list)):
         fs, signal = wavfile.read(wav_path)
         crowd_mic = pd.read_csv(csv_path)
+        signal *= signal_info['signal_max']
 
         feature_array = []
         crowd_array = []
