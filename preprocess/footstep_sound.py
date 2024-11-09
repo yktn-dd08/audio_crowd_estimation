@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from scipy.io import wavfile
 from pydantic import BaseModel
 
+from common.decompose import NMFD
 
 WAV_FILE_FOOTSTEP = [
     '1-155858-A-25.wav',
@@ -107,10 +108,31 @@ def footstep_decompose(wav_name):
     if fs != FS:
         # down-sampling
         signal = librosa.resample(y=signal.astype(float), orig_sr=fs, target_sr=FS)
+    _, _, x = sp.signal.stft(x=signal, fs=FS, window='hann', nperseg=1024, noverlap=512)
+    abs_x = np.abs(x)
+    freq_num = x.shape[0]
+    dt = 5
+    alpha = 1.0 / (dt / 4)
+    kk = 1
+    init_w = np.tile(np.array([t * np.exp(-alpha * t) for t in range(dt)])[:, np.newaxis], freq_num).T
+    init_w = init_w[:, np.newaxis, :]
+    init_w = np.tile(init_w, (1, kk, 1))
+    nmfd = NMFD(v=abs_x, k=kk, dt=dt, init_w=init_w, n_iter=100)
+    w, h = nmfd.fit()
 
+    for k in range(kk):
+        fig = plt.figure(figsize=(10, 8))
+        ax1 = fig.add_subplot(2, 2, 1)
+        ax1.imshow(np.log(w[:, k, :]), cmap='rainbow')
+        ax1.invert_yaxis()
+        ax2 = fig.add_subplot(2, 2, 2)
+        ax2.plot(h[k, :])
+        plt.savefig(f'workspace/nmfd_test{k}.png')
+        plt.close()
     return
 
 
 if __name__ == '__main__':
     # TODO implement of footstep decomposition
-    plot_spectrogram()
+    # plot_spectrogram()
+    footstep_decompose('./data/ambient_sound/audio/1-155858-A-25.wav')
