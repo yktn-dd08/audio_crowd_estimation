@@ -6,6 +6,7 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 from scipy.io import wavfile
+from pydantic import BaseModel
 
 
 WAV_FILE_FOOTSTEP = [
@@ -51,6 +52,23 @@ WAV_FILE_FOOTSTEP = [
     '5-51149-A-25.wav'
 ]
 FS = 16000
+
+
+class EnvSoundInfo(BaseModel):
+    file: str
+    segment: list[float]
+    type: str | None = None
+    flag: bool = True
+
+    def save_segment(self, org_folder, res_folder, normalize=True, base_position=0.1):
+        fs, signal = wavfile.read(f'{org_folder}/{self.file}')
+        for i in range(len(self.segment) - 1):
+            pass
+        return
+
+
+class EnvSoundConfig(BaseModel):
+    config: dict[str, EnvSoundInfo]
 
 
 def plot_spectrogram():
