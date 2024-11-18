@@ -1,3 +1,5 @@
+import glob
+import json
 import os.path
 
 import librosa
@@ -6,7 +8,7 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 from scipy.io import wavfile
-from pydantic import BaseModel
+from common.audio_crowd import EnvSoundConfig, EnvSoundInfo
 
 from common.decompose import NMFD
 
@@ -54,22 +56,19 @@ WAV_FILE_FOOTSTEP = [
 ]
 FS = 16000
 
-
-class EnvSoundInfo(BaseModel):
-    file: str
-    segment: list[float]
-    type: str | None = None
-    flag: bool = True
-
-    def save_segment(self, org_folder, res_folder, normalize=True, base_position=0.1):
-        fs, signal = wavfile.read(f'{org_folder}/{self.file}')
-        for i in range(len(self.segment) - 1):
-            pass
-        return
+"""
+from preprocess.footstep_sound import *
+conf = EnvSoundConfig.read_json('./footstep_config.json')
+conf.config['1-155858-A-25'].save_segment(org_folder='./data/ambient_sound/audio', res_folder='./data/ambient_sound/footstep/1-155858-A-25')
+"""
 
 
-class EnvSoundConfig(BaseModel):
-    config: dict[str, EnvSoundInfo]
+def footstep_segmentation(config_json, input_folder, output_folder):
+    conf = EnvSoundConfig.read_json(config_json)
+    for tag, info in conf.config.items():
+
+        pass
+    return
 
 
 def plot_spectrogram():

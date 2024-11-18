@@ -1,10 +1,19 @@
+import os
+import json
+import glob
+import librosa
+import numpy as np
 import pandas as pd
+
+from scipy.io import wavfile
+from scipy.ndimage import gaussian_filter1d
 from shapely import wkt
 from shapely.geometry import LineString, Point
 from shapely.ops import split
 from common.logger import get_logger
 from pydantic import BaseModel
 
+FS = 16000
 logger = get_logger(__name__)
 
 
@@ -85,7 +94,13 @@ class Crowd(BaseModel):
     def get_foot_points(self):
         """
 
-        :return: [{'t': time(float), 'point': point(Point)}]
+        :return:
+        [
+            {
+                't': time(float),
+                'point': point(Point)
+            }
+        ]
         """
         walking_distance = self.path.length
         dist = 0.0
@@ -106,3 +121,84 @@ class Crowd(BaseModel):
             dist += self.foot_step
 
         return res
+
+
+def get_first_singular_index(data, min_max):
+    assert min_max in ['min', 'max']
+    dif = np.diff(data, n=1)
+    if min_max == 'min':
+        for j in range(len(dif) - 1):
+            if dif[j] < 0.0 <= dif[j + 1]:
+                return j
+    else:
+        for j in range(len(dif) - 1):
+            if dif[j] > 0.0 >= dif[j + 1]:
+                return j
+    return -1
+
+
+class EnvSoundInfo(BaseModel):
+    file: str
+    segment: list[float]
+    type: str | None = None
+    flag: bool = True
+
+    def read_org_wav(self, org_folder, resample=False):
+        fs, signal = wavfile.read(f'{org_folder}/{self.file}')
+        if resample and fs != FS:
+            signal = librosa.resample(y=signal.astype(float), orig_sr=fs, target_sr=FS)
+            fs = FS
+        return fs, signal
+
+    def read_wav_segments(self, folder, resample=True, normalize=False):
+        file_pattern = self.file.replace('.wav', '-*.wav')
+        file_list = glob.glob(f'{folder}/{file_pattern}')
+        file_list.sort()
+        res = []
+        for f in file_list:
+            fs, signal = wavfile.read(f)
+            if resample and fs != FS:
+                signal = librosa.resample(y=signal.astype(float), orig_sr=fs, target_sr=FS)
+                fs = FS
+            if normalize:
+                signal = signal / signal.std()
+            res.append((fs, signal))
+        return res
+
+    def save_segment(self, org_folder, res_folder, alignment=0.1):
+        fs, signal = self.read_org_wav(org_folder, False)
+        for i in range(len(self.segment) - 1):
+            # extract signal segment
+            start_time, end_time = int(self.segment[i] * fs), int(self.segment[i + 1] * fs)
+            signal_seg = signal[start_time:end_time]
+
+            # signal alignment
+            singular_index = get_first_singular_index(data=gaussian_filter1d(input=signal_seg ** 2,
+                                                                             sigma=int(fs * 0.01),
+                                                                             mode='constant'),
+                                                      min_max='max')
+            align_index = int(alignment * fs)
+            if singular_index >= align_index:
+                signal_seg = signal_seg[singular_index-align_index:]
+            else:
+                signal_seg = np.concatenate([np.zeros(align_index-singular_index), signal_seg])
+
+            # signal normalization
+            # if normalize:
+            #     signal_seg = signal_seg / signal_seg.std()
+
+            # save signal segment as wav file
+            os.makedirs(res_folder, exist_ok=True)
+            wav_name = self.file.replace('.wav', f'-{i}.wav')
+            wavfile.write(filename=f'{res_folder}/{wav_name}', data=signal_seg, rate=fs)
+        return
+
+
+class EnvSoundConfig(BaseModel):
+    config: dict[str, EnvSoundInfo]
+
+    @classmethod
+    def read_json(cls, file_name):
+        with open(file_name, 'r', encoding='utf-8') as f:
+            s = json.load(f)
+        return cls(**s)
