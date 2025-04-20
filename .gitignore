@@ -167,3 +167,5 @@ workspace/
 *.sh
 .DS_Store
 script/
+
+.python-version

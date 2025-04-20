@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import librosa
+import argparse
 import numpy as np
 import pandas as pd
 
@@ -189,10 +190,10 @@ class EnvSoundInfo(BaseModel):
                 signal_seg = np.concatenate([np.zeros(align_index-singular_index), signal_seg])
 
             # signal normalization
-            # signal_max = np.max(np.abs(signal_seg))
+            signal_max = np.max(np.abs(signal_seg))
             # 最大で除算するとパワーで規格化できない -> 音のエネルギーに差が出る -> どうするか検討中
-            signal_seg = signal_seg / (signal_seg.std() * 3)
-            # signal_seg = signal_seg / signal_max
+            # signal_seg = signal_seg / (signal_seg.std() * 3)
+            signal_seg = signal_seg / signal_max
             # TODO この後にnp.int16で規格化する
             # if normalize:
             #     signal_seg = signal_seg / signal_seg.std()
@@ -212,3 +213,27 @@ class EnvSoundConfig(BaseModel):
         with open(file_name, 'r', encoding='utf-8') as f:
             s = json.load(f)
         return cls(**s)
+
+
+def footstep_sound_segmentation(input_folder, output_folder, config_json):
+    conf = EnvSoundConfig.read_json(config_json)
+    for tag, sound_info in conf.config.items():
+        if sound_info.flag:
+            res_folder = f'{output_folder}/{tag}'
+            sound_info.save_segment(org_folder=input_folder, res_folder=res_folder)
+            logger.info(f'{tag}: # of segments={len(sound_info.segment) - 1}, saved footstep segments in {res_folder}.')
+        else:
+            logger.info(f'{tag}: flag={sound_info.flag}, segmentation skipped.')
+    return
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-opt', '--option', type=str, choices=['segment'], default='segment')
+    parser.add_argument('-i', '--input-folder', type=str)
+    parser.add_argument('-o', '--output-folder', type=str)
+    parser.add_argument('-c', '--config-json', type=str)
+    args = parser.parse_args()
+    if args.option == 'segment':
+        footstep_sound_segmentation(args.input_folder, args.output_folder, args.config_json)
+    pass

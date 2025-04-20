@@ -133,7 +133,7 @@ def load_trj_df(pg_url, table_name, start_time, end_time, roi_wkt, distance=5):
     ST_Length(ST_LineMerge(ST_Collect(line ORDER BY start_time))) AS len
     FROM {table_name} {get_where(start_time, end_time, roi_wkt)} GROUP BY id
     HAVING ST_Length(ST_LineMerge(ST_Collect(line ORDER BY start_time))) > {distance};'''
-
+    print(pg_url)
     with create_engine(pg_url).connect() as conn:
         logger.info(f'SQL - {sql.replace("\n", "").replace("    ", " ")}')
         s = time.time()

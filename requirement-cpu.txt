@@ -1,19 +1,4 @@
-numpy==1.26.4
-scipy
-matplotlib
-pandas
-sounddevice
-pyroomacoustics
-nara-wpe
-librosa
-scikit-learn
-shap
-xgboost
-lightgbm
-py2shpss
-joblib
+-r requirement/common.txt
 torch
 torchvision
 torchaudio
-pydantic
-rich

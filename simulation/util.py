@@ -764,17 +764,27 @@ def test():
 
 def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0,
                            distance_list=None):
+    signal_info = {}
     if distance_list is None:
         distance_list = [1, 10, 20, 30, 40, 50]
+    signal_info['distance_list'] = distance_list
+
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
-    logger.info(f'simulation time: {min([c.start_time for c in crowd_list])} - {max([c.start_time for c in crowd_list])}')
+    st_time, ed_time = min([c.start_time for c in crowd_list]), max([c.start_time for c in crowd_list])
+    signal_info['simulation_time'] = [str(st_time), str(ed_time)]
+    logger.info(f'simulation time: {st_time} - {ed_time}')
 
     # print('Reading Simulation room shapefile.')
     crowd_sim = CrowdSim.from_shp(room_shp)
+    signal_info['shp_file'] = room_shp
+    signal_info['corner'] = []
     for i, corner in enumerate(crowd_sim.room_info['corners'].T):
         logger.debug(f'corner {i} - {corner.tolist()}')
+        signal_info['corner'].append(corner.tolist())
     logger.info('sampling rate - ' + str(crowd_sim.room_info['fs']))
     logger.info('max_order - ' + str(crowd_sim.room_info['max_order']))
+    signal_info['sampling_rate'] = crowd_sim.room_info['fs']
+    signal_info['max_order'] = crowd_sim.room_info['max_order']
     crowd_sim.set_crowd(crowd_list)
     room_center = crowd_sim.room_info['corners'].mean(axis=1)
 
@@ -788,9 +798,9 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
         mic_location = np.array([[dr['geometry'].x, dr['geometry'].y, dr['height']]
                                  for _, dr in df.iterrows() if crowd_sim.room_polygon.contains(dr['geometry'])])
     crowd_sim.set_microphone(mic_location)
+    signal_info['microphone'] = mic_location.tolist()
     for i, mic in enumerate(mic_location.tolist()):
         logger.debug(f'microphone {i} - {mic}')
-
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     signals = crowd_sim.simulation(multi_process=True, time_unit=time_unit)
@@ -799,7 +809,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
     max_signal = np.abs(signals).max()
 
     # 信号値はmaxで割って保存するが、これを残しておかないと複数ケースのシミュレーションを比較できない(スケールがバラバラになる)
-    signal_info = {'signal_max': float(max_signal)}
+    signal_info |= {'signal_max': float(max_signal), 'info': {}}
 
     if snr is not None:
         sigma_n = crowd_sim.generate_noise_std(snr=snr)
@@ -807,20 +817,27 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
         signal_info['noise_sigma'] = float(sigma_n)
 
     signals = signals / max_signal
+
     for s in range(len(signals)):
-        logger.info(f'save wav file - {output_folder}/sim_mic{id_list[s]:04}.wav')
-        wavfile.write(f'{output_folder}/sim_mic{id_list[s]:04}.wav', SR, signals[s])
+        wav_path = f'{output_folder}/sim_mic{id_list[s]:04}.wav'
+        logger.info(f'save wav file - {wav_path}')
+        wavfile.write(wav_path, SR, signals[s])
+        signal_info['info'][f'ch{s}'] = {'wav_path': wav_path}
+
+    # save crowd with each range
+    crowd_path = f'{output_folder}/crowd.csv'
+    logger.info(f'save crowd csv - {crowd_path}')
+    crowd_sim.crowd_density_to_csv(crowd_path)
+    signal_info['crowd_path'] = crowd_path
+    for s in range(len(signals)):
+        each_crowd = f'{output_folder}/crowd_mic{id_list[s]:04}.csv'
+        logger.info(f'save crowd from mic{id_list[s]} - {each_crowd}')
+        crowd_sim.crowd_density_from_each_mic(mic_index=id_list[s], csv_name=each_crowd, distance_list=distance_list)
+        signal_info['info'][f'ch{s}'] |= {'each_crowd': each_crowd}
+
     with open(f'{output_folder}/signal_info.json', 'w') as f:
         json.dump(signal_info, f, indent=4)
 
-    # save crowd with each range
-    logger.info(f'save crowd csv - {output_folder}/crowd.csv')
-    crowd_sim.crowd_density_to_csv(f'{output_folder}/crowd.csv')
-    for s in range(len(signals)):
-        logger.info(f'save crowd from mic{id_list[s]} - {output_folder}/crowd_mic{id_list[s]:04}.csv')
-        crowd_sim.crowd_density_from_each_mic(mic_index=id_list[s],
-                                              csv_name=f'{output_folder}/crowd_mic{id_list[s]:04}.csv',
-                                              distance_list=distance_list)
     # with open(f'{output_folder}/log.json', 'w', encoding='utf-8') as f:
     #     json.dump(log_info, f, indent=4)
     return
