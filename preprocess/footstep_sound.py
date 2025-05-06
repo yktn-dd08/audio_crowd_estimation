@@ -5,12 +5,14 @@ import os.path
 import librosa
 import argparse
 import numpy as np
+import pandas as pd
 import scipy as sp
 import matplotlib.pyplot as plt
 from scipy.io import wavfile
-from common.audio_crowd import EnvSoundConfig, EnvSoundInfo
-
+from common.audio_crowd import EnvSoundConfig, EnvSoundInfo, FootTagSetting
+from common.logger import get_logger
 from common.decompose import NMFD
+
 
 WAV_FILE_FOOTSTEP = [
     '1-155858-A-25.wav',
@@ -55,6 +57,7 @@ WAV_FILE_FOOTSTEP = [
     '5-51149-A-25.wav'
 ]
 FS = 16000
+logger = get_logger('preprocess.footstep_sound')
 
 """
 from preprocess.footstep_sound import *
@@ -65,9 +68,13 @@ conf.config['1-155858-A-25'].save_segment(org_folder='./data/ambient_sound/audio
 
 def footstep_segmentation(config_json, input_folder, output_folder):
     conf = EnvSoundConfig.read_json(config_json)
-    for tag, info in conf.config.items():
-
-        pass
+    for tag, sound_info in conf.config.items():
+        if sound_info.flag:
+            res_folder = f'{output_folder}/{tag}'
+            sound_info.save_segment(org_folder=input_folder, res_folder=res_folder)
+            logger.info(f'{tag}: # of segments={len(sound_info.segment) - 1}, saved footstep segments in {res_folder}.')
+        else:
+            logger.info(f'{tag}: flag={sound_info.flag}, segmentation skipped.')
     return
 
 
@@ -131,7 +138,39 @@ def footstep_decompose(wav_name):
     return
 
 
+def add_foot_tag(input_csv, output_csv, config_json, foot_tag_json):
+    logger.info(f'Read {input_csv}')
+    df = pd.read_csv(input_csv)
+    id_list = pd.unique(df['id'].astype(str)).tolist()
+    logger.info(f'# of ID: {len(id_list)}')
+
+    foot_tag_setting = FootTagSetting.read_json(foot_tag_json)
+    conf = EnvSoundConfig.read_json(config_json)
+    foot_tag_list = foot_tag_setting.get_tag_list(conf, len(id_list))
+    logger.info(f'Foot Tag List: {list(set(foot_tag_list))}')
+
+    foot_tag_dict = {pid: foot_tag for pid, foot_tag in zip(id_list, foot_tag_list)}
+    df['foot_tag'] = df['id'].apply(lambda x: foot_tag_dict[str(x)])
+
+    logger.info(f'Write {output_csv}')
+    folder = os.path.dirname(output_csv)
+    os.makedirs(folder, exist_ok=True)
+    df.to_csv(output_csv, index=False)
+    return
+
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-opt', '--option', type=str, choices=['segment', 'foot_tag'], default='segment')
+    parser.add_argument('-i', '--input', type=str)
+    parser.add_argument('-o', '--output', type=str)
+    parser.add_argument('-c', '--config-json', type=str, default='./footstep_config.json')
+    parser.add_argument('-f', '--foot-tag-json', type=str)
+    args = parser.parse_args()
+    if args.option == 'segment':
+        footstep_segmentation(args.input, args.output, args.config_json)
+    elif args.option == 'foot_tag':
+        add_foot_tag(args.input, args.output, args.config_json, args.foot_tag_json)
     # TODO implement of footstep decomposition
     # plot_spectrogram()
-    footstep_decompose('./data/ambient_sound/audio/1-155858-A-25.wav')
+    # footstep_decompose('./data/ambient_sound/audio/1-155858-A-25.wav')

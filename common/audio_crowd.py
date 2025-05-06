@@ -215,6 +215,64 @@ class EnvSoundConfig(BaseModel):
         return cls(**s)
 
 
+class SoundCondition(BaseModel):
+    type: list[str] | None = None
+    tag: list[str] | None = None
+
+    def include(self, sound_info: EnvSoundInfo, tag: str = None):
+        if not sound_info.flag:
+            return False
+        if tag is None:
+            tag = sound_info.file.replace('.wav', '')
+        if self.type is None:
+            if self.tag is None:
+                return True
+            else:
+                return tag in self.tag
+        else:
+            if self.tag is None:
+                return sound_info.type in self.type
+            else:
+                return (tag in self.tag) and (sound_info.type in self.type)
+
+
+class FootTagSetting(BaseModel):
+    include: SoundCondition | None = None
+    exclude: SoundCondition | None = None
+    random_state: int
+
+    @classmethod
+    def read_json(cls, file_name):
+        with open(file_name, 'r', encoding='utf-8') as f:
+            s = json.load(f)
+        return cls(**s)
+
+    def set_seed(self):
+        np.random.seed(self.random_state)
+        return
+
+    def satisfied_tag_list(self, env_sound_config: EnvSoundConfig):
+        tag_list = []
+        for tag, sound_info in env_sound_config.config.items():
+            if sound_info.flag:
+                # includeに何も入っていない場合は全てのfoottagを入れる
+                include_flag = self.include.include(sound_info, tag) if self.include else True
+                # if self.include == {}:
+                #     include_flag = True
+                # excludeに何も入っていない場合はfoottagの除外対象なしとする
+                exclude_flag = self.exclude.include(sound_info, tag) if self.exclude else False
+                # if self.exclude == {}:
+                #     exclude_flag = False
+                if include_flag and not exclude_flag:
+                    tag_list.append(tag)
+        return tag_list
+
+    def get_tag_list(self, env_sound_config: EnvSoundConfig, tag_num: int):
+        self.set_seed()
+        tag_list = self.satisfied_tag_list(env_sound_config)
+        return np.random.choice(tag_list, tag_num).tolist()
+
+
 def footstep_sound_segmentation(input_folder, output_folder, config_json):
     conf = EnvSoundConfig.read_json(config_json)
     for tag, sound_info in conf.config.items():

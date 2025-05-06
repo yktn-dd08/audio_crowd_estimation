@@ -248,7 +248,8 @@ class Crowd:
                           start_time=(dr['start_time']-start_time).total_seconds(),
                           height=1.7 if 'height' not in df.columns else dr['height'],
                           foot_step=1.7 * 0.35 if 'foot_step' not in df.columns else dr['foot_step'],
-                          name=str(dr['id']))
+                          name=str(dr['id']),
+                          foot_tag=None if 'foot_tag' not in df.columns else dr['foot_tag'])
                       for _, dr in df.iterrows()]
 
         return crowd_list
@@ -258,7 +259,8 @@ class Crowd:
                  height: float,
                  foot_step: float,
                  time_step: float = 1.0,
-                 name=None):
+                 name=None,
+                 foot_tag=None):
         self.time_step = time_step
         self.path = path
         self.start_time = start_time
@@ -266,6 +268,7 @@ class Crowd:
         self.foot_step = foot_step
         self.duration = len(path.coords) * time_step
         self.name = name
+        self.foot_tag = foot_tag
 
     def time_interpolate(self, t: float | int):
         if self.start_time > t or t >= self.start_time + self.duration:
@@ -423,8 +426,10 @@ class CrowdSim:
         # res = Parallel(n_jobs=-1)(delayed(get_foot_points_wrapper)(i) for i in range(len(crowd_list)))
         # res.sort(key=lambda x: x[1])
         # self.footstep = [r[0] for r in res]
-        self.footstep = [crowd.get_foot_points() for crowd in tqdm(self.crowd_list, desc='[CrowdSet')]
-        foot_tags = [self.foot_sound.get_tags()[0] for _ in self.crowd_list]
+        self.footstep = [crowd.get_foot_points() for crowd in tqdm(self.crowd_list, desc='[CrowdSet]')]
+        # foot_tags = [self.foot_sound.get_tags()[0] for _ in self.crowd_list]
+        foot_tags = [self.foot_sound.get_tags()[0] if crowd.foot_tag is None else crowd.foot_tag
+                     for crowd in self.crowd_list]
         self.person_sound_info = [
             {
                 'id': i,
@@ -771,7 +776,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
 
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
     st_time, ed_time = min([c.start_time for c in crowd_list]), max([c.start_time for c in crowd_list])
-    signal_info['simulation_time'] = [str(st_time), str(ed_time)]
+    signal_info['simulation_time'] = [st_time, ed_time]
     logger.info(f'simulation time: {st_time} - {ed_time}')
 
     # print('Reading Simulation room shapefile.')

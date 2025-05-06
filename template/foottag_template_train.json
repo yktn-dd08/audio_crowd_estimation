@@ -1,0 +1,9 @@
+{
+    "include": {
+        "type": ["asphalt"]
+    },
+    "exclude": {
+        "tag": ["1-155858-A-25"]
+    },
+    "random_state": 0
+}

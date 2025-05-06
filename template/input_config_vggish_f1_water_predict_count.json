@@ -1,0 +1,22 @@
+{
+    "predict": {
+        "input_folder_list": [
+            "./workspace/sim/marunouchi/water/roi1_crowd0806_15"
+        ],
+        "model_folder": "./workspace/model/asphalt/vggish",
+        "output_folder": "./workspace/model/asphalt/vggish/water_result",
+        "model_name": "VGGishLinear",
+        "target": ["count"],
+        "batch_size": 64,
+        "model_param": {
+            "frame_num": 1,
+            "pre_trained": true,
+            "token_dim": 128,
+            "n_head": 4,
+            "h_dim": 128,
+            "layer_num": 1
+        },
+        "epoch": 50,
+        "log_scale": true
+    }
+}

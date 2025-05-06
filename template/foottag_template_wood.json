@@ -1,0 +1,6 @@
+{
+    "include": {
+        "type": ["wood"]
+    },
+    "random_state": 0
+}

@@ -1,0 +1,6 @@
+{
+    "include": {
+        "type": ["water"]
+    },
+    "random_state": 0
+}
