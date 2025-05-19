@@ -33,6 +33,7 @@ class VGGishLinear(nn.Module):
 class VGGishLinear2(nn.Module):
     """
     VGGish + 線型結合での回帰用モデル
+
     VGGishLinearで対応できなかった複数フレームに対応、ただしこの修正方法が良いかは不明
 
     x: Tensor [batch_size x frame_num x 1 x 96 x 64] -> batched input

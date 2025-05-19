@@ -2,5 +2,6 @@
     "include": {
         "type": ["water"]
     },
-    "random_state": 0
+    "random_state": 0,
+    "height": [160.0, 180.0]
 }

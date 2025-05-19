@@ -12,6 +12,7 @@ import torch.nn as nn
 from sklearn.model_selection import train_test_split
 from tqdm.asyncio import tarange
 
+from model.cnn_model import *
 from model.vggish_model import *
 from torchaudio.prototype.pipelines import VGGISH
 from common.logger import get_logger
@@ -332,6 +333,40 @@ def vggish_prediction(input_folder_list, model_folder, model_name, output_folder
     return
 
 
+def read_logmel_for_cnn(input_folder_list, output_folder):
+    return
+
+
+def model_training(config_json):
+    if 'VGGish' in config_json['model_name']:
+        vggish_training(input_folder_list=config_json['input_folder_list'],
+                        model_folder=config_json['model_folder'],
+                        model_name=config_json['model_name'],
+                        model_param=config_json['model_param'],
+                        target=config_json['target'],
+                        epoch=config_json['epoch'],
+                        batch_size=config_json['batch_size'],
+                        log_scale=config_json['log_scale'])
+    elif 'CNN' in config_json['model_name']:
+        pass
+    return
+
+
+def model_prediction(config_json):
+    if 'VGGish' in config_json['model_name']:
+        vggish_prediction(input_folder_list=config_json['input_folder_list'],
+                          output_folder=config_json['output_folder'],
+                          model_folder=config_json['model_folder'],
+                          model_name=config_json['model_name'],
+                          model_param=config_json['model_param'],
+                          target=config_json['target'],
+                          batch_size=config_json['batch_size'],
+                          log_scale=config_json['log_scale'])
+    elif 'CNN' in config_json['model_name']:
+        pass
+    return
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-opt', '--option', type=str, choices=['train', 'predict'])
@@ -341,25 +376,27 @@ if __name__ == '__main__':
     with open(args.input_config_json, 'r') as f:
         cf = json.load(f)
     if args.option == 'train':
-        cf = cf['train']
-        vggish_training(input_folder_list=cf['input_folder_list'],
-                        model_folder=cf['model_folder'],
-                        model_name=cf['model_name'],
-                        model_param=cf['model_param'],
-                        target=cf['target'],
-                        epoch=cf['epoch'],
-                        batch_size=cf['batch_size'],
-                        log_scale=cf['log_scale'])
+        model_training(cf['train'])
+        # cf = cf['train']
+        # vggish_training(input_folder_list=cf['input_folder_list'],
+        #                 model_folder=cf['model_folder'],
+        #                 model_name=cf['model_name'],
+        #                 model_param=cf['model_param'],
+        #                 target=cf['target'],
+        #                 epoch=cf['epoch'],
+        #                 batch_size=cf['batch_size'],
+        #                 log_scale=cf['log_scale'])
     elif args.option == 'predict':
-        cf = cf['predict']
-        vggish_prediction(input_folder_list=cf['input_folder_list'],
-                          output_folder=cf['output_folder'],
-                          model_folder=cf['model_folder'],
-                          model_name=cf['model_name'],
-                          model_param=cf['model_param'],
-                          target=cf['target'],
-                          batch_size=cf['batch_size'],
-                          log_scale=cf['log_scale'])
+        model_prediction(cf['predict'])
+        # cf = cf['predict']
+        # vggish_prediction(input_folder_list=cf['input_folder_list'],
+        #                   output_folder=cf['output_folder'],
+        #                   model_folder=cf['model_folder'],
+        #                   model_name=cf['model_name'],
+        #                   model_param=cf['model_param'],
+        #                   target=cf['target'],
+        #                   batch_size=cf['batch_size'],
+        #                   log_scale=cf['log_scale'])
     # if args.option == 'train':
     #     file_setting = cf['file']
     #     param_setting = cf['train']

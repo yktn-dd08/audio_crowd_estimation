@@ -2,5 +2,6 @@
     "include": {
         "tag": ["1-155858-A-25"]
     },
-    "random_state": 0
+    "random_state": 0,
+    "height": [165.0, 175.0]
 }

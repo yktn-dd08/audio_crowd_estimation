@@ -5,6 +5,7 @@ import librosa
 import argparse
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from scipy.io import wavfile
 from scipy.ndimage import gaussian_filter1d
@@ -150,6 +151,7 @@ class EnvSoundInfo(BaseModel):
     flag: bool = True
 
     def read_org_wav(self, org_folder, resample=False):
+        logger.info(f'Read {self.file}')
         fs, signal = wavfile.read(f'{org_folder}/{self.file}')
         if resample and fs != FS:
             signal = librosa.resample(y=signal.astype(float), orig_sr=fs, target_sr=FS)
@@ -179,10 +181,8 @@ class EnvSoundInfo(BaseModel):
             signal_seg = signal[start_time:end_time]
 
             # signal alignment
-            singular_index = get_first_singular_index(data=gaussian_filter1d(input=signal_seg ** 2,
-                                                                             sigma=int(fs * 0.01),
-                                                                             mode='constant'),
-                                                      min_max='max')
+            power_env = gaussian_filter1d(input=signal_seg ** 2, sigma=int(fs * 0.01), mode='constant')
+            singular_index = get_first_singular_index(data=power_env, min_max='max')
             align_index = int(alignment * fs)
             if singular_index >= align_index:
                 signal_seg = signal_seg[singular_index-align_index:]
@@ -202,6 +202,80 @@ class EnvSoundInfo(BaseModel):
             os.makedirs(res_folder, exist_ok=True)
             wav_name = self.file.replace('.wav', f'-{i}.wav')
             wavfile.write(filename=f'{res_folder}/{wav_name}', data=signal_seg, rate=fs)
+
+            png_name = wav_name.replace('.wav', '.png')
+            plt.plot(power_env)
+            plt.savefig(f'{res_folder}/{png_name}')
+            plt.close()
+        return
+
+    def get_raw_signal_seg(self, org_folder):
+        fs, signal = self.read_org_wav(org_folder, False)
+        signal_seg = [signal[int(self.segment[i] * fs):int(self.segment[i + 1] * fs)]
+                      for i in range(len(self.segment) - 1)]
+        # signal_seg = [seg - seg.mean() for seg in signal_seg]
+        return fs, signal_seg
+
+    def calc_time_delay(self, signal_seg: list):
+        # signal_seg = [whole_signal[int(self.segment[i]*fs):int(self.segment[i+1]for i in range(len(self.segment) - 1)]
+        time_list = [len(seg) for seg in signal_seg]
+        # time_list = [self.segment[i + 1] - self.segment[i] for i in range(len(self.segment) - 1)]
+        base_index = time_list.index(min(time_list))
+        delay_list = []
+        for i in range(len(self.segment) - 1):
+            cross_corr = np.correlate(signal_seg[base_index] - signal_seg[base_index].mean(),
+                                      signal_seg[i] - signal_seg[i].mean(), 'full')
+            delay_list.append(cross_corr.argmax() - len(signal_seg[i]) + 1)
+        return delay_list
+
+
+    def save_segment_corr(self, org_folder, res_folder):
+        # read signal segment
+        fs, signal_seg = self.get_raw_signal_seg(org_folder)
+
+        if len(self.segment) == 0:
+            logger.info(f'Skipped due to no alignment data in config json.')
+            return
+
+        # calculate time delay based on cross-correlation
+        delay_list = self.calc_time_delay(signal_seg)
+
+        os.makedirs(res_folder, exist_ok=True)
+        for i in range(len(self.segment) - 1):
+            delay = delay_list[i]
+            wav_name = self.file.replace('.wav', f'-{i}.wav')
+            cor_segment = np.concatenate([np.zeros(delay), signal_seg[i]]) if delay > 0 else signal_seg[i][-delay:]
+            cor_segment = cor_segment / np.abs(cor_segment).max()
+            wavfile.write(filename=f'{res_folder}/{wav_name}', data=cor_segment, rate=fs)
+
+        # fs, signal = self.read_org_wav(org_folder, False)
+        # signal_seg = []
+        # len_list = []
+        # for i in range(len(self.segment) - 1):
+        #     # extract raw signal segment
+        #     start_time, end_time = int(self.segment[i] * fs), int(self.segment[i + 1] * fs)
+        #     signal_seg.append(signal[start_time:end_time]-signal[start_time:end_time].mean())
+        #     len_list.append(end_time-start_time)
+        # base_index = len_list.index(min(len_list))
+        # delay_list = []
+        # for i in range(len(self.segment) - 1):
+        #     # calculate cross-correlation
+        #     cross_corr = np.correlate(signal_seg[base_index], signal_seg[i], 'full')
+        #     delay_list.append(cross_corr.argmax() - len(signal_seg[i]) + 1)
+        # logger.info(f'delay_list: {delay_list}')
+        #
+        # corrected_segment = [np.roll(signal_seg[i], delay_list[i]) for i in range(len(self.segment) - 1)]
+        # os.makedirs(res_folder, exist_ok=True)
+        # for i in range(len(self.segment) - 1):
+        #     wav_name = self.file.replace('.wav', f'-{i}.wav')
+        #     png_name = wav_name.replace('.wav', '.png')
+        #     plt.plot(signal_seg[i])
+        #     plt.savefig(f'{res_folder}/{png_name}')
+        #     plt.close()
+        #
+        #     plt.plot(corrected_segment[i])
+        #     plt.savefig(f'{res_folder}/corr-{png_name}')
+        #     plt.close()
         return
 
 
@@ -240,6 +314,7 @@ class FootTagSetting(BaseModel):
     include: SoundCondition | None = None
     exclude: SoundCondition | None = None
     random_state: int
+    height: list[float] | None = None
 
     @classmethod
     def read_json(cls, file_name):
@@ -272,6 +347,10 @@ class FootTagSetting(BaseModel):
         tag_list = self.satisfied_tag_list(env_sound_config)
         return np.random.choice(tag_list, tag_num).tolist()
 
+    def get_height_list(self, height_num):
+        self.set_seed()
+        height_mm = [170, 170] if self.height is None else self.height
+        return (np.random.random(height_num) * (height_mm[1] - height_mm[0]) + height_mm[0]).tolist()
 
 def footstep_sound_segmentation(input_folder, output_folder, config_json):
     conf = EnvSoundConfig.read_json(config_json)

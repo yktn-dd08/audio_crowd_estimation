@@ -71,7 +71,7 @@ def footstep_segmentation(config_json, input_folder, output_folder):
     for tag, sound_info in conf.config.items():
         if sound_info.flag:
             res_folder = f'{output_folder}/{tag}'
-            sound_info.save_segment(org_folder=input_folder, res_folder=res_folder)
+            sound_info.save_segment_corr(org_folder=input_folder, res_folder=res_folder)
             logger.info(f'{tag}: # of segments={len(sound_info.segment) - 1}, saved footstep segments in {res_folder}.')
         else:
             logger.info(f'{tag}: flag={sound_info.flag}, segmentation skipped.')
@@ -147,10 +147,14 @@ def add_foot_tag(input_csv, output_csv, config_json, foot_tag_json):
     foot_tag_setting = FootTagSetting.read_json(foot_tag_json)
     conf = EnvSoundConfig.read_json(config_json)
     foot_tag_list = foot_tag_setting.get_tag_list(conf, len(id_list))
+    height_list = foot_tag_setting.get_height_list(len(id_list))
     logger.info(f'Foot Tag List: {list(set(foot_tag_list))}')
 
     foot_tag_dict = {pid: foot_tag for pid, foot_tag in zip(id_list, foot_tag_list)}
+    height_dict = {pid: height for pid, height in zip(id_list, height_list)}
     df['foot_tag'] = df['id'].apply(lambda x: foot_tag_dict[str(x)])
+    df['height'] = df['id'].apply(lambda x: height_dict[str(x)] / 100)
+    df['foot_step'] = df['height'] * 0.35
 
     logger.info(f'Write {output_csv}')
     folder = os.path.dirname(output_csv)
@@ -168,7 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--foot-tag-json', type=str)
     args = parser.parse_args()
     if args.option == 'segment':
-        footstep_segmentation(args.input, args.output, args.config_json)
+        footstep_segmentation(args.config_json, args.input, args.output)
     elif args.option == 'foot_tag':
         add_foot_tag(args.input, args.output, args.config_json, args.foot_tag_json)
     # TODO implement of footstep decomposition

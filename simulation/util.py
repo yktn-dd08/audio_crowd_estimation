@@ -360,11 +360,13 @@ class FootstepSound:
                          for tag, files in self.file_dict.items()}
 
     @staticmethod
-    def __read_wav_file(filename, fs):
+    def __read_wav_file(filename, fs, normalize=True):
         _fs, signal = wavfile.read(filename)
         signal = signal.astype(float)
         if _fs != fs:
             signal = librosa.resample(y=signal, orig_sr=_fs, target_sr=fs)
+        if normalize:
+            signal = signal / signal.std()
         return signal
 
     def get_rnd_sound_index(self, tag):
