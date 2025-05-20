@@ -1,14 +1,14 @@
 {
     "train": {
         "input_folder_list": [
-            "./workspace/sim/marunouchi/train/roi1_crowd0806_09",
-            "./workspace/sim/marunouchi/train/roi1_crowd0806_10",
-            "./workspace/sim/marunouchi/train/roi1_crowd0806_11",
-            "./workspace/sim/marunouchi/train/roi1_crowd0806_12",
-            "./workspace/sim/marunouchi/train/roi1_crowd0806_13",
-            "./workspace/sim/marunouchi/train/roi1_crowd0806_14"
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_09",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_11",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_12",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_13",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_14"
         ],
-        "model_folder": "./workspace/model/asphalt/vggish_f10",
+        "model_folder": "./workspace/model/asphalt/VGGishLinear_f10",
         "model_name": "VGGishLinear",
         "target": ["count"],
         "batch_size": 64,
@@ -25,10 +25,10 @@
     },
     "predict": {
         "input_folder_list": [
-            "./workspace/sim/marunouchi/test/roi1_crowd0806_15"
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
         ],
-        "model_folder": "./workspace/model/asphalt/vggish_f10",
-        "output_folder": "./workspace/model/asphalt/vggish_f10/test_result",
+        "model_folder": "./workspace/model/asphalt/VGGishLinear_f10",
+        "output_folder": "./workspace/model/asphalt/VGGishLinear_f10/test_result",
         "model_name": "VGGishLinear",
         "target": ["count"],
         "batch_size": 64,

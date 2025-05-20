@@ -20,6 +20,7 @@ from analysis.model_common import *
 
 
 FS = 16000
+MODEL_LIST = ['VGGishLinear', 'VGGishTransformer', 'SimpleCNN']
 logger = get_logger('analysis.model_training')
 
 
@@ -52,7 +53,38 @@ def read_crowd(input_folder, channel_num=1):
     return result
 
 
+def read_logmel_torch_cnn(input_folder, target=None, channel_num=1, time_sec=1, log_scale=True):
+    if target is None:
+        target = ['count']
+    assert channel_num == 1, 'Can input only single channel signal.'
+    signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
+    crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
+    time_length = min(int(len(signal) / FS), len(crowd[target[0]]))
+    x = [trans_logmel(signal[FS * (t+1-time_sec):FS * (t + 1)], FS) for t in range(time_sec - 1,time_length)]
+    x = torch.stack(x)
+    y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in target]).T
+    if log_scale:
+        y_np = np.log(y_np + 1.0)
+    y = torch.Tensor(y_np)
+    return x, y
+
+
 def read_logmel_torch(input_folder, target=None, channel_num=1, time_sec=1, log_scale=True):
+    """
+    1秒のデータの時のlogmelとy
+    Parameters
+    ----------
+    input_folder
+    target
+    channel_num
+    time_sec
+    log_scale
+
+    Returns
+    -------
+
+    """
+
     if target is None:
         target = ['count']
     assert channel_num == 1, 'Can input only single channel signal.'
@@ -78,7 +110,7 @@ def read_logmel_torch2(input_folder, target=None, channel_num=1, time_sec=1, log
     crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
     logmel_func = VGGISH.get_input_processor()
     time_length = min(int(len(signal) / FS), len(crowd[target[0]]))
-    # TODO time_sec > 1の時の対応
+    # time_sec > 1の時の対応
     x = [logmel_func(torch.Tensor(signal[FS * (t+1-time_sec):FS * (t + 1)])) for t in range(time_sec-1,time_length)]
     x = torch.stack(x)
     y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in target]).T
@@ -86,6 +118,13 @@ def read_logmel_torch2(input_folder, target=None, channel_num=1, time_sec=1, log
         y_np = np.log(y_np + 1.0)
     y = torch.Tensor(y_np)
     return x, y
+
+
+def read_logmel(model_name, input_folder, target=None, channel_num=1, time_sec=1, log_scale=True):
+    if 'VGGish' in model_name:
+        return read_logmel_torch2(input_folder, target, channel_num, time_sec, log_scale)
+    else:
+        return read_logmel_torch_cnn(input_folder, target, channel_num, time_sec, log_scale)
 
 
 def vggish_training_old(input_folder_list, model_folder, target, epoch, log_scale=True, vgg_frame=1, pre_trained=True,
@@ -156,8 +195,8 @@ def vggish_training_old(input_folder_list, model_folder, target, epoch, log_scal
     scatter_plot(target_np, output_np, f'{model_folder}/scatter.png')
     return
 
-def vggish_training(input_folder_list, model_folder, model_name, model_param, target, epoch,
-                    log_scale=True, batch_size=64):
+def audio_crowd_training(input_folder_list, model_folder, model_name, model_param, target, epoch,
+                         log_scale=True, batch_size=64):
     """
 
     Parameters
@@ -178,13 +217,17 @@ def vggish_training(input_folder_list, model_folder, model_name, model_param, ta
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if target is None:
         target = ['count']
-    assert model_name in ['VGGishLinear', 'VGGishTransformer']
+    assert model_name in MODEL_LIST
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
     x, y = None, None
     for i, input_folder in enumerate(input_folder_list):
         logger.info(f'Reading Folders: {input_folder}')
-        tmp_x, tmp_y = read_logmel_torch2(input_folder=input_folder, target=target, channel_num=1,
-                                          time_sec=model_param['frame_num'])
+        # tmp_x, tmp_y = read_logmel_torch2(input_folder=input_folder,
+        #                                   target=target,
+        #                                   channel_num=1,
+        #                                   time_sec=model_param['frame_num'])
+        tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
+                                   time_sec=model_param['frame_num'])
         x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
         y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
 
@@ -201,8 +244,10 @@ def vggish_training(input_folder_list, model_folder, model_name, model_param, ta
                                   layer_num=model_param['layer_num'],
                                   out_features=len(target),
                                   pre_trained=model_param['pre_trained']).to(device)
+    elif model_name == 'SimpleCNN':
+        model = SimpleCNN(frame_num=model_param['frame_num'],
+                          freq_num=model_param['freq_num']).to(device)
 
-    # model = VGGishLinear(vgg_frame=frame_num, out_features=len(target), pre_trained=pre_trained).to(device)
     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
     train_dataset = torch.utils.data.TensorDataset(x[tr_idx].to(device), y[tr_idx].to(device))
     test_dataset = torch.utils.data.TensorDataset(x[ts_idx].to(device), y[ts_idx].to(device))
@@ -223,7 +268,7 @@ def vggish_training(input_folder_list, model_folder, model_name, model_param, ta
     if not os.path.exists(model_folder):
         os.makedirs(model_folder, exist_ok=True)
     view_loss(train_loss, test_loss, f'{model_folder}/loss.png')
-    torch.save(model.state_dict(), f'{model_folder}/vggish_model.pt')
+    torch.save(model.state_dict(), f'{model_folder}/{model_name}_model.pt')
 
     target_np, output_np = model_predict(model, train_dataloader)
     if log_scale:
@@ -280,19 +325,21 @@ def vggish_prediction_old(input_folder_list, model_folder, output_folder, target
     return
 
 
-def vggish_prediction(input_folder_list, model_folder, model_name, output_folder, model_param, target, log_scale=True,
-                      batch_size=64):
+def audio_crowd_prediction(input_folder_list, model_folder, model_name, output_folder, model_param, target,
+                           log_scale=True, batch_size=64):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if target is None:
         target = ['count']
-    assert model_name in ['VGGishLinear', 'VGGishTransformer']
+    assert model_name in MODEL_LIST
     logger.info(f'Start {model_name} Prediction: {device} - Columns: {target}')
 
     x, y = None, None
     for i, input_folder in enumerate(input_folder_list):
         logger.info(f'Reading Folders: {input_folder}')
-        tmp_x, tmp_y = read_logmel_torch2(input_folder=input_folder, target=target, channel_num=1,
-                                          time_sec=model_param['frame_num'])
+        # tmp_x, tmp_y = read_logmel_torch2(input_folder=input_folder, target=target, channel_num=1,
+        #                                   time_sec=model_param['frame_num'])
+        tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
+                                   time_sec=model_param['frame_num'])
         x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
         y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
     model = None
@@ -308,8 +355,11 @@ def vggish_prediction(input_folder_list, model_folder, model_name, output_folder
                                   layer_num=model_param['layer_num'],
                                   out_features=len(target),
                                   pre_trained=model_param['pre_trained'])
+    elif model_name == 'SimpleCNN':
+        model = SimpleCNN(frame_num=model_param['frame_num'],
+                          freq_num=model_param['freq_num'])
 
-    model_param = torch.load(f'{model_folder}/vggish_model.pt')
+    model_param = torch.load(f'{model_folder}/{model_name}_model.pt')
     model.load_state_dict(model_param)
     model = model.to(device)
     test_dataset = torch.utils.data.TensorDataset(x.to(device), y.to(device))
@@ -333,40 +383,6 @@ def vggish_prediction(input_folder_list, model_folder, model_name, output_folder
     return
 
 
-def read_logmel_for_cnn(input_folder_list, output_folder):
-    return
-
-
-def model_training(config_json):
-    if 'VGGish' in config_json['model_name']:
-        vggish_training(input_folder_list=config_json['input_folder_list'],
-                        model_folder=config_json['model_folder'],
-                        model_name=config_json['model_name'],
-                        model_param=config_json['model_param'],
-                        target=config_json['target'],
-                        epoch=config_json['epoch'],
-                        batch_size=config_json['batch_size'],
-                        log_scale=config_json['log_scale'])
-    elif 'CNN' in config_json['model_name']:
-        pass
-    return
-
-
-def model_prediction(config_json):
-    if 'VGGish' in config_json['model_name']:
-        vggish_prediction(input_folder_list=config_json['input_folder_list'],
-                          output_folder=config_json['output_folder'],
-                          model_folder=config_json['model_folder'],
-                          model_name=config_json['model_name'],
-                          model_param=config_json['model_param'],
-                          target=config_json['target'],
-                          batch_size=config_json['batch_size'],
-                          log_scale=config_json['log_scale'])
-    elif 'CNN' in config_json['model_name']:
-        pass
-    return
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-opt', '--option', type=str, choices=['train', 'predict'])
@@ -376,7 +392,16 @@ if __name__ == '__main__':
     with open(args.input_config_json, 'r') as f:
         cf = json.load(f)
     if args.option == 'train':
-        model_training(cf['train'])
+        cf = cf['train']
+        # model_training(cf['train'])
+        audio_crowd_training(input_folder_list=cf['input_folder_list'],
+                             model_folder=cf['model_folder'],
+                             model_name=cf['model_name'],
+                             model_param=cf['model_param'],
+                             target=cf['target'],
+                             epoch=cf['epoch'],
+                             batch_size=cf['batch_size'],
+                             log_scale=cf['log_scale'])
         # cf = cf['train']
         # vggish_training(input_folder_list=cf['input_folder_list'],
         #                 model_folder=cf['model_folder'],
@@ -387,16 +412,16 @@ if __name__ == '__main__':
         #                 batch_size=cf['batch_size'],
         #                 log_scale=cf['log_scale'])
     elif args.option == 'predict':
-        model_prediction(cf['predict'])
-        # cf = cf['predict']
-        # vggish_prediction(input_folder_list=cf['input_folder_list'],
-        #                   output_folder=cf['output_folder'],
-        #                   model_folder=cf['model_folder'],
-        #                   model_name=cf['model_name'],
-        #                   model_param=cf['model_param'],
-        #                   target=cf['target'],
-        #                   batch_size=cf['batch_size'],
-        #                   log_scale=cf['log_scale'])
+        # model_prediction(cf['predict'])
+        cf = cf['predict']
+        audio_crowd_prediction(input_folder_list=cf['input_folder_list'],
+                               output_folder=cf['output_folder'],
+                               model_folder=cf['model_folder'],
+                               model_name=cf['model_name'],
+                               model_param=cf['model_param'],
+                               target=cf['target'],
+                               batch_size=cf['batch_size'],
+                               log_scale=cf['log_scale'])
     # if args.option == 'train':
     #     file_setting = cf['file']
     #     param_setting = cf['train']

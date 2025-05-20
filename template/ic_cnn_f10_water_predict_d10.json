@@ -3,18 +3,19 @@
         "input_folder_list": [
             "./workspace/sim/marunouchi/water/roi1_crowd0806_15"
         ],
-        "model_folder": "./workspace/model/asphalt/vggish_f10_d10",
-        "output_folder": "./workspace/model/asphalt/vggish_f10_d10/water_result",
-        "model_name": "VGGishLinear",
+        "model_folder": "./workspace/model/asphalt/SimpleCNN_f10_d10",
+        "output_folder": "./workspace/model/asphalt/SimpleCNN_f10_d10/water_result",
+        "model_name": "SimpleCNN",
         "target": ["distance_10"],
         "batch_size": 64,
         "model_param": {
-            "frame_num": 10,
+            "frame_num": 1001,
             "pre_trained": true,
             "token_dim": 128,
             "n_head": 4,
             "h_dim": 128,
-            "layer_num": 1
+            "layer_num": 1,
+            "freq_num": 64
         },
         "epoch": 50,
         "log_scale": true
