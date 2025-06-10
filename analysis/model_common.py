@@ -6,6 +6,11 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolu
 from tqdm import tqdm
 
 
+def get_device():
+    dev = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    return dev
+
+
 def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
     model.train()
     train_loss = 0
@@ -74,6 +79,7 @@ def view_loss(train_loss, test_loss, filename):
     plt.grid(True)
     plt.savefig(filename)
     plt.cla()
+    plt.close()
     return
 
 
@@ -87,6 +93,7 @@ def scatter_plot(target, output, filename):
     plt.grid(True)
     plt.savefig(filename)
     plt.cla()
+    plt.close()
     return
 
 

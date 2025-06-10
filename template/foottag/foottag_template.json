@@ -1,0 +1,40 @@
+{
+    "pebble": {
+        "include": {
+        "type": ["pebble"]
+        },
+        "random_state": 0,
+        "height": [160.0, 180.0]
+    },
+    "test": {
+        "include": {
+            "tag": ["1-155858-A-25"]
+        },
+        "random_state": 0,
+        "height": [165.0, 175.0]
+    },
+    "train": {
+        "include": {
+            "type": ["asphalt"]
+        },
+        "exclude": {
+            "tag": ["1-155858-A-25"]
+        },
+        "random_state": 0,
+        "height": [160.0, 180.0]
+    },
+    "water": {
+        "include": {
+            "type": ["water"]
+        },
+        "random_state": 0,
+        "height": [160.0, 180.0]
+    },
+    "wood": {
+        "include": {
+            "type": ["wood"]
+        },
+        "random_state": 0,
+        "height": [160.0, 180.0]
+    }
+}

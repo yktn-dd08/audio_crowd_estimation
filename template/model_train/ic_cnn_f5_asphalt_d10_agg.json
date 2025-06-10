@@ -1,0 +1,54 @@
+{
+    "train": {
+        "input_folder_list": [
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_09",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_11",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_12",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_13",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_14"
+        ],
+        "model_folder": "./workspace/model/asphalt/SimpleCNN_f5_d10_agg",
+        "model_name": "SimpleCNN",
+        "target": ["distance_10"],
+        "batch_size": 64,
+        "model_param": {
+            "time_sec": 5,
+            "frame_num": 501,
+            "pre_trained": true,
+            "token_dim": 128,
+            "n_head": 4,
+            "h_dim": 128,
+            "layer_num": 1,
+            "freq_num": 64,
+            "kernel_size": 101
+        },
+        "epoch": 50,
+        "log_scale": true,
+        "time_agg": true
+    },
+    "predict": {
+        "input_folder_list": [
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
+        ],
+        "model_folder": "./workspace/model/asphalt/SimpleCNN_f5_d10_agg",
+        "output_folder": "./workspace/model/asphalt/SimpleCNN_f5_d10_agg/test_result",
+        "model_name": "SimpleCNN",
+        "target": ["distance_10"],
+        "batch_size": 64,
+        "model_param": {
+            "time_sec": 5,
+            "frame_num": 501,
+            "pre_trained": true,
+            "token_dim": 128,
+            "n_head": 4,
+            "h_dim": 128,
+            "layer_num": 1,
+            "freq_num": 64,
+            "kernel_size": 101
+        },
+        "epoch": 100,
+        "log_scale": true,
+        "time_agg": true
+    }
+}
