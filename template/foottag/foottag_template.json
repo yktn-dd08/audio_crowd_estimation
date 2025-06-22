@@ -1,7 +1,7 @@
 {
     "pebble": {
         "include": {
-        "type": ["pebble"]
+            "type": ["pebble"]
         },
         "random_state": 0,
         "height": [160.0, 180.0]

@@ -1,5 +1,5 @@
 {
-    "optuna": {
+    "train": {
         "input_folder_list": [
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_09",
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
@@ -11,42 +11,22 @@
         "valid_folder_list": [
             "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
         ],
-        "model_folder": "./workspace/optuna/asphalt/SimpleCNN2_f5_d10_layer3_random",
-        "model_name": "SimpleCNN2",
+        "model_folder": "./workspace/optuna/asphalt/MultiTaskCNN_f5_d10_layer3",
+        "model_name": "MultiTaskCNN",
         "target": ["distance_10"],
+        "tasks": ["range_0-2", "range_2-4", "range_4-6", "range_6-8", "range_8-10"],
         "batch_size": 64,
-        "n_trials": 5000,
-        "sampler": "random",
         "model_param": {
             "time_sec": 5,
             "frame_num": 501,
             "freq_num": 64,
 
             "layer_num": 3,
-            "kernel_size": {
-                "type": "list[int]",
-                "size": "layer_num",
-                "high": 31,
-                "low": 3
-            },
-            "dilation_size": {
-                "type": "list[int]",
-                "size": "layer_num",
-                "high": 11,
-                "low": 1
-            },
-            "inter_ch": {
-                "type": "list[int]",
-                "size": "layer_num",
-                "high": 16,
-                "low": 2
-            },
-            "pool_size": {
-                "type": "list[int]",
-                "size": "layer_num",
-                "high": 3,
-                "low": 1
-            }
+            "task_num": 5,
+            "kernel_size": 4,
+            "dilation_size": 3,
+            "inter_ch": 12,
+            "pool_size": 2
         },
         "epoch": 50,
         "log_scale": true,
