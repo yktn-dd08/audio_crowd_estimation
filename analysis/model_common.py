@@ -122,19 +122,23 @@ def model_predict(model, test_loader, verbose=True):
 
 def model_predict_multitask(model, test_loader, verbose=True):
     model.eval()
-    target_list = []
-    output_list = []
+    target_list, target_task_list = [], []
+    output_list, output_task_list = [], []
     with torch.no_grad():
         with tqdm(test_loader, disable=not verbose) as _test_loader:
             for batch_idx, (x, y, task) in enumerate(_test_loader):
-                output, _ = model(x)
+                output, output_task = model(x)
                 target_list.append(y.to('cpu').detach().numpy())
                 output_list.append(output.to('cpu').detach().numpy())
+                target_task_list.append(task.to('cpu').detach().numpy())
+                output_task_list.append(output_task.to('cpu').detach().numpy())
                 # target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
                 # output_np = np.concatenate([output_np, output.to('cpu').detach().numpy()], axis=0)
     target_np = np.concatenate(target_list, axis=0)
     output_np = np.concatenate(output_list, axis=0)
-    return target_np, output_np
+    target_task_np = np.concatenate(target_task_list, axis=0)
+    output_task_np = np.concatenate(output_task_list, axis=0)
+    return target_np, output_np, target_task_np, output_task_np
 
 
 def view_loss(train_loss, test_loss, filename):

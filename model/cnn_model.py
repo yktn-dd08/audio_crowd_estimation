@@ -36,6 +36,27 @@ def trans_logmel(signal: np.ndarray | torch.Tensor, fs=16000):
     return torch.log(mel_spec(signal) + _LOG_OFFSET)
 
 
+def set_list(param_name, param, list_size):
+    if not isinstance(param, list):
+        param = [param] * list_size
+    else:
+        assert len(param) == list_size, f'Input List[int] with {list_size} elements for {param_name}.'
+    return param
+
+
+def set_double_list(param_name, param, task_num: int, layer_num: list[int]):
+    assert task_num == len(layer_num), f'Input list[int] with {task_num} elements for layer_num.'
+    if not isinstance(param, list):
+        param = [[param] * layer_num[i] for i in range(task_num)]
+    else:
+        assert len(param) == task_num, f'Input list with {task_num} elements for {param_name}.'
+        tmp = []
+        for i in range(task_num):
+            tmp.append(param[i] if isinstance(param[i], list) else [param[i]] * layer_num[i])
+        param = tmp
+    return param
+
+
 class SimpleCNN(nn.Module):
     """
     Simple 1D-CNN model
@@ -77,10 +98,10 @@ class SimpleCNN2(nn.Module):
     ):
         super(SimpleCNN2, self).__init__()
 
-        kernel_size = SimpleCNN2.set_list('kernel_size', kernel_size, layer_num)
-        dilation_size = SimpleCNN2.set_list('dilation_size', dilation_size, layer_num)
-        inter_ch = SimpleCNN2.set_list('inter_ch', inter_ch, layer_num)
-        pool_size = SimpleCNN2.set_list('pool_size', pool_size, layer_num)
+        kernel_size = set_list('kernel_size', kernel_size, layer_num)
+        dilation_size = set_list('dilation_size', dilation_size, layer_num)
+        inter_ch = set_list('inter_ch', inter_ch, layer_num)
+        pool_size = set_list('pool_size', pool_size, layer_num)
         # if not isinstance(kernel_size, list):
         #     kernel_size = [kernel_size] * layer_num
         # else:
@@ -124,13 +145,13 @@ class SimpleCNN2(nn.Module):
         x = self.regressor(x)
         return x
 
-    @staticmethod
-    def set_list(param_name, param, list_size):
-        if not isinstance(param, list):
-            param = [param] * list_size
-        else:
-            assert len(param) == list_size, f'Input List[int] with {list_size} elements for {param_name}.'
-        return param
+    # @staticmethod
+    # def set_list(param_name, param, list_size):
+    #     if not isinstance(param, list):
+    #         param = [param] * list_size
+    #     else:
+    #         assert len(param) == list_size, f'Input List[int] with {list_size} elements for {param_name}.'
+    #     return param
 
     @staticmethod
     def is_valid(
@@ -203,7 +224,7 @@ x = torch.Tensor(x_np)
 task = model.each_task(x, 0)
 """
 
-class MultiTaskCNN(nn.Module):
+class AreaSpecificCNN(nn.Module):
     def __init__(
             self,
             task_num: int,
@@ -216,13 +237,13 @@ class MultiTaskCNN(nn.Module):
             pool_size: int | list[int] | list[list[int]] = 2,
             out_features=1
     ):
-        super(MultiTaskCNN, self).__init__()
+        super(AreaSpecificCNN, self).__init__()
         self.task_num = task_num
-        layer_num = MultiTaskCNN.set_list('layer_num', layer_num, task_num)
-        kernel_size = MultiTaskCNN.set_double_list('kernel_size', kernel_size, task_num, layer_num)
-        dilation_size = MultiTaskCNN.set_double_list('dilation_size', dilation_size, task_num, layer_num)
-        inter_ch = MultiTaskCNN.set_double_list('inter_ch', inter_ch, task_num, layer_num)
-        pool_size = MultiTaskCNN.set_double_list('pool_size', pool_size, task_num, layer_num)
+        layer_num = set_list('layer_num', layer_num, task_num)
+        kernel_size = set_double_list('kernel_size', kernel_size, task_num, layer_num)
+        dilation_size = set_double_list('dilation_size', dilation_size, task_num, layer_num)
+        inter_ch = set_double_list('inter_ch', inter_ch, task_num, layer_num)
+        pool_size = set_double_list('pool_size', pool_size, task_num, layer_num)
 
         self.task_conv = nn.ModuleList()
         self.task_regressor = nn.ModuleList()
@@ -251,26 +272,26 @@ class MultiTaskCNN(nn.Module):
         #  ToBe: 各タスクの推定値を算出する直前の出力(チャネル方向の情報は保持したもの)を結合して線型結合により人数を推定
         self.regressor = nn.Linear(in_features=task_num, out_features=out_features)
 
-    @staticmethod
-    def set_list(param_name, param, list_size: int):
-        if not isinstance(param, list):
-            param = [param] * list_size
-        else:
-            assert len(param) == list_size, f'Input List[int] with {list_size} elements for {param_name}.'
-        return param
-
-    @staticmethod
-    def set_double_list(param_name, param, task_num: int, layer_num: list[int]):
-        assert task_num == len(layer_num), f'Input list[int] with {task_num} elements for layer_num.'
-        if not isinstance(param, list):
-            param = [[param] * layer_num[i] for i in range(task_num)]
-        else:
-            assert len(param) == task_num, f'Input list with {task_num} elements for {param_name}.'
-            tmp = []
-            for i in range(task_num):
-                tmp.append(param[i] if isinstance(param[i], list) else [param[i]] * layer_num[i])
-            param = tmp
-        return param
+    # @staticmethod
+    # def set_list(param_name, param, list_size: int):
+    #     if not isinstance(param, list):
+    #         param = [param] * list_size
+    #     else:
+    #         assert len(param) == list_size, f'Input List[int] with {list_size} elements for {param_name}.'
+    #     return param
+    #
+    # @staticmethod
+    # def set_double_list(param_name, param, task_num: int, layer_num: list[int]):
+    #     assert task_num == len(layer_num), f'Input list[int] with {task_num} elements for layer_num.'
+    #     if not isinstance(param, list):
+    #         param = [[param] * layer_num[i] for i in range(task_num)]
+    #     else:
+    #         assert len(param) == task_num, f'Input list with {task_num} elements for {param_name}.'
+    #         tmp = []
+    #         for i in range(task_num):
+    #             tmp.append(param[i] if isinstance(param[i], list) else [param[i]] * layer_num[i])
+    #         param = tmp
+    #     return param
     
     @staticmethod
     def is_valid(task_num: int,
@@ -283,11 +304,11 @@ class MultiTaskCNN(nn.Module):
                  pool_size: int | list[int] | list[list[int]] = 2,
                  out_features=1):
         try:
-            layer_num = MultiTaskCNN.set_list('layer_num', layer_num, task_num)
-            kernel_size = MultiTaskCNN.set_double_list('kernel_size', kernel_size, task_num, layer_num)
-            dilation_size = MultiTaskCNN.set_double_list('dilation_size', dilation_size, task_num, layer_num)
-            inter_ch = MultiTaskCNN.set_double_list('inter_ch', inter_ch, task_num, layer_num)
-            pool_size = MultiTaskCNN.set_double_list('pool_size', pool_size, task_num, layer_num)
+            layer_num = set_list('layer_num', layer_num, task_num)
+            kernel_size = set_double_list('kernel_size', kernel_size, task_num, layer_num)
+            dilation_size = set_double_list('dilation_size', dilation_size, task_num, layer_num)
+            inter_ch = set_double_list('inter_ch', inter_ch, task_num, layer_num)
+            pool_size = set_double_list('pool_size', pool_size, task_num, layer_num)
         except AssertionError as e:
             logger.info(f'Not valid model: {e}.')
             return False
@@ -332,3 +353,184 @@ class MultiTaskCNN(nn.Module):
         shared = self.task(x)
         y = self.regressor(shared)
         return y, shared
+
+
+class AreaSpecificCNN2(nn.Module):
+    def __init__(
+            self,
+            task_num: int,
+            freq_num: int,
+            frame_num: int,
+
+            common_kernel_size: int | list[int],
+            kernel_size: int | list[int] | list[list[int]],
+
+            common_dilation_size: int | list[int],
+            dilation_size: int | list[int] | list[list[int]],
+
+            common_layer_num: int,
+            layer_num: int | list[int],
+
+            common_inter_ch: int | list[int],
+            inter_ch: int | list[int] | list[list[int]],
+
+            common_pool_size: int | list[int] = 2,
+            pool_size: int | list[int] | list[list[int]] = 2,
+
+            out_features=1
+    ):
+        super(AreaSpecificCNN2, self).__init__()
+
+        common_kernel_size = set_list('kernel_size', common_kernel_size, common_layer_num)
+        common_dilation_size = set_list('dilation_size', common_dilation_size, common_layer_num)
+        common_inter_ch = set_list('inter_ch', common_inter_ch, common_layer_num)
+        common_pool_size = set_list('pool_size', common_pool_size, common_layer_num)
+
+        self.conv = nn.ModuleList()
+        for l in range(common_layer_num):
+            self.conv.append(
+                nn.Conv1d(
+                    in_channels=freq_num if l == 0 else common_inter_ch[l-1],
+                    out_channels=common_inter_ch[l],
+                    kernel_size=common_kernel_size[l],
+                    dilation=common_dilation_size[l]
+                )
+            )
+            self.conv.append(nn.ReLU())
+            self.conv.append(nn.MaxPool1d(kernel_size=common_pool_size[l]))
+        common_reg_time = frame_num
+        for l in range(common_layer_num):
+            common_reg_time = common_reg_time - common_dilation_size[l] * (common_kernel_size[l] - 1)
+            common_reg_time = int(common_reg_time / common_pool_size[l])
+
+        layer_num = set_list('layer_num', layer_num, task_num)
+        kernel_size = set_double_list('kernel_size', kernel_size, task_num, layer_num)
+        dilation_size = set_double_list('dilation_size', dilation_size, task_num, layer_num)
+        inter_ch = set_double_list('inter_ch', inter_ch, task_num, layer_num)
+        pool_size = set_double_list('pool_size', pool_size, task_num, layer_num)
+
+        self.task_num = task_num
+        self.task_conv = nn.ModuleList()
+        self.task_regressor = nn.ModuleList()
+
+        for t in range(task_num):
+            each_conv = nn.ModuleList()
+            for l in range(layer_num[t]):
+                each_conv.append(nn.Conv1d(in_channels=common_inter_ch[-1] if l == 0 else inter_ch[t][l-1],
+                                           kernel_size=kernel_size[t][l],
+                                           dilation=dilation_size[t][l],
+                                           out_channels=inter_ch[t][l]))
+                each_conv.append(nn.ReLU())
+                each_conv.append(nn.MaxPool1d(kernel_size=pool_size[t][l]))
+            self.task_conv.append(each_conv)
+
+            reg_time = common_reg_time
+            for l in range(layer_num[t]):
+                reg_time = reg_time - dilation_size[t][l] * (kernel_size[t][l] - 1)
+                reg_time = int(reg_time / pool_size[t][l])
+            # TODO
+            #  AsIs: 全特徴量をフラット化して推定
+            #  ToBe: 1D-CNNにして時間報告を集約したのち、チャネル方向の集約を行なって各タスクを推定
+            self.task_regressor.append(nn.Linear(in_features=reg_time * inter_ch[t][-1], out_features=1))
+        # TODO
+        #  AsIs: 各タスクの出力の線型結合により人数を推定
+        #  ToBe: 各タスクの推定値を算出する直前の出力(チャネル方向の情報は保持したもの)を結合して線型結合により人数を推定
+        self.regressor = nn.Linear(in_features=task_num, out_features=out_features)
+
+    @staticmethod
+    def is_valid(
+        task_num: int,
+        freq_num: int,
+        frame_num: int,
+
+        common_kernel_size: int | list[int],
+        kernel_size: int | list[int] | list[list[int]],
+
+        common_dilation_size: int | list[int],
+        dilation_size: int | list[int] | list[list[int]],
+
+        common_layer_num: int,
+        layer_num: int | list[int],
+
+        common_inter_ch: int | list[int],
+        inter_ch: int | list[int] | list[list[int]],
+
+        common_pool_size: int | list[int] = 2,
+        pool_size: int | list[int] | list[list[int]] = 2,
+
+        out_features=1
+    ):
+        try:
+            common_kernel_size = set_list('kernel_size', common_kernel_size, common_layer_num)
+            common_dilation_size = set_list('dilation_size', common_dilation_size, common_layer_num)
+            common_inter_ch = set_list('inter_ch', common_inter_ch, common_layer_num)
+            common_pool_size = set_list('pool_size', common_pool_size, common_layer_num)
+
+            layer_num = set_list('layer_num', layer_num, task_num)
+            kernel_size = set_double_list('kernel_size', kernel_size, task_num, layer_num)
+            dilation_size = set_double_list('dilation_size', dilation_size, task_num, layer_num)
+            inter_ch = set_double_list('inter_ch', inter_ch, task_num, layer_num)
+            pool_size = set_double_list('pool_size', pool_size, task_num, layer_num)
+        except AssertionError as e:
+            logger.info(f'Not valid model: {e}.')
+            return False
+
+        model_params = {
+            'freq_num': freq_num,
+            'frame_num': frame_num,
+            'common_kernel_size': common_kernel_size,
+            'common_dilation_size': common_dilation_size,
+            'common_layer_num': common_layer_num,
+            'common_inter_ch': common_inter_ch,
+            'common_pool_size': common_pool_size
+        }
+        common_reg_time = frame_num
+        for l in range(common_layer_num):
+            common_reg_time = common_reg_time - common_dilation_size[l] * (common_kernel_size[l] - 1)
+            common_reg_time = int(common_reg_time / common_pool_size[l])
+        if common_reg_time < 1:
+            logger.warning(
+                f'Invalid model parameters, {model_params}. You should input small number as `common_layer_num`.'
+            )
+            return False
+
+        model_params = {
+            'freq_num': freq_num,
+            'frame_num': frame_num,
+            'kernel_size': kernel_size,
+            'dilation_size': dilation_size,
+            'layer_num': layer_num,
+            'inter_ch': inter_ch,
+            'pool_size': pool_size
+        }
+
+        for t in range(task_num):
+            reg_time = common_reg_time
+            for l in range(layer_num[t]):
+                reg_time = reg_time - dilation_size[t][l] * (kernel_size[t][l] - 1)
+                reg_time = int(reg_time / pool_size[t][l])
+            if reg_time < 1:
+                logger.warning(
+                    f'Invalid model parameters, {model_params}. You should input small number as `layer_num`'
+                )
+
+        return True
+
+    def common_layer(self, x):
+        for mod in self.conv:
+            x = mod(x)
+        return x
+
+    def each_area(self, x, task_idx):
+        for mod in self.task_conv[task_idx]:
+            x = mod(x)
+        x = torch.flatten(x, 1)
+        reg = self.task_regressor[task_idx]
+        x = reg(x)
+        return x
+
+    def forward(self, x):
+        x = self.common_layer(x)
+        x = torch.cat([self.each_area(x, t) for t in range(self.task_num)], dim=1)
+        y = self.regressor(x)
+        return y, x

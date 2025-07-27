@@ -36,7 +36,7 @@ def save_logmel_spec2(wav_file, img_file):
     folder = os.path.dirname(img_file)
     os.makedirs(folder, exist_ok=True)
     mel = melspectrogram(y=signal.astype(float), sr=FS) + 1.0e-20
-    plt.figure(figsize=(12, 4))
+    plt.figure(figsize=(12, 6))
     librosa.display.specshow(librosa.power_to_db(mel, ref=np.max), x_axis='time', y_axis='mel', sr=FS,
                              cmap='rainbow')
     plt.colorbar(format='%+2.0f dB')

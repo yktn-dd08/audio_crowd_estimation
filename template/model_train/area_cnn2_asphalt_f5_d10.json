@@ -1,0 +1,46 @@
+{
+    "train": {
+        "input_folder_list": [
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_09",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_11",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_12",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_13",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_14"
+        ],
+        "valid_folder_list": [
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
+        ],
+        "model_folder": "./workspace/model/asphalt/AreaSpecificCNN2_f5_d10_layer2_1_w10",
+        "model_name": "AreaSpecificCNN2",
+        "target": ["distance_10"],
+        "tasks": ["range_0-1", "range_1-2", "range_2-3", "range_3-4", "range_4-5", "range_5-6", "range_6-7", "range_7-8", "range_8-9", "range_9-10"],
+        "batch_size": 64,
+        "model_param": {
+            "time_sec": 5,
+            "frame_num": 501,
+            "freq_num": 64,
+
+            "task_num": 10,
+            "common_layer_num": 2,
+            "layer_num": 1,
+
+            "common_kernel_size": 4,
+            "kernel_size": 4,
+
+            "common_dilation_size": 3,
+            "dilation_size": 3,
+
+            "common_inter_ch": 12,
+            "inter_ch": 12,
+
+            "common_pool_size": 2,
+            "pool_size": 2
+        },
+        "weight": 10.0,
+        "epoch": 50,
+        "log_scale": true,
+        "time_agg": true
+    }
+}
+

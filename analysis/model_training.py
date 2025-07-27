@@ -13,6 +13,7 @@ import torch.nn as nn
 from sklearn.model_selection import train_test_split
 
 from model.cnn_model import *
+from model.transformer import *
 from model.vggish_model import *
 from torchaudio.prototype.pipelines import VGGISH
 from common.logger import get_logger
@@ -20,7 +21,8 @@ from analysis.model_common import *
 
 
 FS = 16000
-MODEL_LIST = ['VGGishLinear', 'VGGishTransformer', 'SimpleCNN', 'SimpleCNN2', 'MultiTaskCNN']
+MODEL_LIST = ['VGGishLinear', 'VGGishTransformer', 'SimpleCNN', 'SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2',
+              'ASTRegressor']
 SAMPLER_LIST = ['random', 'tpe']
 TASK_PATTERN = r'range_(\d+)-(\d+)'
 logger = get_logger('analysis.model_training')
@@ -58,6 +60,7 @@ def read_crowd(input_folder, channel_num=1):
 def calc_other_task(crowd, task_name):
     """
     task_name: range_a-b
+    マイク距離ごとの人数を算出する
     """
     match = re.search(TASK_PATTERN, task_name)
     if match:
@@ -70,7 +73,8 @@ def calc_other_task(crowd, task_name):
         Exception(f'task_name should be `range_a-b` which means number of crowds with the distance a - b.')
 
 
-def read_logmel_torch(input_folder, target=None, tasks=None, channel_num=1, time_sec=1, log_scale=True, time_agg=False):
+def read_logmel_torch(input_folder, target=None, tasks=None,
+                      channel_num=1, time_sec=1, log_scale=True, time_agg=False):
     if target is None:
         target = ['count']
     assert channel_num == 1, 'Can input only single channel signal.'
@@ -84,7 +88,7 @@ def read_logmel_torch(input_folder, target=None, tasks=None, channel_num=1, time
     x = torch.stack(x)
     y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in target]).T
     if time_agg:
-        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) for t in range(time_sec - 1, time_length)]
+        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) / time_sec for t in range(time_sec - 1, time_length)]
                          for tg in target]).T
     if log_scale:
         y_np = np.log(y_np + 1.0)
@@ -93,7 +97,8 @@ def read_logmel_torch(input_folder, target=None, tasks=None, channel_num=1, time
     if tasks is not None:
         task_np = np.array([crowd[ts][time_sec-1:time_length] for ts in tasks]).T
         if time_agg:
-            task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) for t in range(time_sec - 1, time_length)]
+            task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) / time_sec
+                                 for t in range(time_sec - 1, time_length)]
                                 for ts in tasks]).T
         if log_scale:
             task_np = np.log(task_np + 1.0)
@@ -103,7 +108,46 @@ def read_logmel_torch(input_folder, target=None, tasks=None, channel_num=1, time
         return x, y
 
 
-def read_logmel_torch_multi_task(input_folder, target, tasks, channel_num=1, time_sec=1, log_scale=True, time_agg=False):
+def read_logmel_torch_ast(input_folder, model_param, target=None, tasks=None,
+                          channel_num=1, time_sec=1, log_scale=True, time_agg=False):
+    # TODO 修正、関係する関数も全て引数から見直し
+    if target is None:
+        target = ['count']
+    assert channel_num == 1, 'Can input only single channel signal.'
+    signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
+    crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
+    if tasks is not None:
+        for task in tasks:
+            crowd[task] = calc_other_task(crowd=crowd, task_name=task)
+    time_length = min(int(len(signal) / FS), len(crowd[target[0]]))
+    sig_list = np.array([signal[FS * (t+1-time_sec):FS * (t + 1)] for t in range(time_sec - 1,time_length)])
+    feat_ext = ASTFeatureExtractor.from_pretrained(model_param['model_name'])
+    x = feat_ext(sig_list, sampling_rate=FS, return_tensors='pt')['input_values']
+    # x = [trans_logmel(signal[FS * (t+1-time_sec):FS * (t + 1)], FS) for t in range(time_sec - 1,time_length)]
+    # x = torch.stack(x)
+    y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in target]).T
+    if time_agg:
+        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) / time_sec for t in range(time_sec - 1, time_length)]
+                         for tg in target]).T
+    if log_scale:
+        y_np = np.log(y_np + 1.0)
+    y = torch.Tensor(y_np)
+
+    if tasks is not None:
+        task_np = np.array([crowd[ts][time_sec-1:time_length] for ts in tasks]).T
+        if time_agg:
+            task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) / time_sec
+                                 for t in range(time_sec - 1, time_length)]
+                                for ts in tasks]).T
+        if log_scale:
+            task_np = np.log(task_np + 1.0)
+        task = torch.Tensor(task_np)
+        return x, y, task
+    else:
+        return x, y
+
+def read_logmel_torch_multi_task(input_folder, target, tasks,
+                                 channel_num=1, time_sec=1, log_scale=True, time_agg=False):
     assert channel_num == 1, 'Can input only single channel signal.'
     signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
     crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
@@ -115,9 +159,10 @@ def read_logmel_torch_multi_task(input_folder, target, tasks, channel_num=1, tim
     y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in tasks]).T
     task_np = np.array([crowd[ts][time_sec-1:time_length] for ts in tasks]).T
     if time_agg:
-        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) for t in range(time_sec - 1, time_length)]
+        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) / time_sec for t in range(time_sec - 1, time_length)]
                          for tg in target]).T
-        task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) for t in range(time_sec - 1, time_length)]
+        task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) / time_sec
+                             for t in range(time_sec - 1, time_length)]
                             for ts in tasks]).T
     if log_scale:
         y_np = np.log(y_np + 1.0)
@@ -126,7 +171,8 @@ def read_logmel_torch_multi_task(input_folder, target, tasks, channel_num=1, tim
     return x, y, task
 
 
-def read_logmel_torch_vgg(input_folder, target=None, tasks=None, channel_num=1, time_sec=1, log_scale=True, time_agg=False):
+def read_logmel_torch_vgg(input_folder, target=None, tasks=None,
+                          channel_num=1, time_sec=1, log_scale=True, time_agg=False):
     if target is None:
         target = ['count']
     assert channel_num == 1, 'Can input only single channel signal.'
@@ -143,7 +189,7 @@ def read_logmel_torch_vgg(input_folder, target=None, tasks=None, channel_num=1, 
     x = torch.stack(x)
     y_np = np.array([crowd[tg][time_sec - 1:time_length] for tg in target]).T
     if time_agg:
-        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) for t in range(time_sec - 1, time_length)]
+        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) / time_sec for t in range(time_sec - 1, time_length)]
                          for tg in target]).T
     if log_scale:
         y_np = np.log(y_np + 1.0)
@@ -151,7 +197,8 @@ def read_logmel_torch_vgg(input_folder, target=None, tasks=None, channel_num=1, 
     if tasks is not None:
         task_np = np.array([crowd[ts][time_sec-1:time_length] for ts in tasks]).T
         if time_agg:
-            task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) for t in range(time_sec - 1, time_length)]
+            task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) / time_sec
+                                 for t in range(time_sec - 1, time_length)]
                                 for ts in tasks]).T
         if log_scale:
             task_np = np.log(task_np + 1.0)
@@ -161,11 +208,104 @@ def read_logmel_torch_vgg(input_folder, target=None, tasks=None, channel_num=1, 
         return x, y
 
 
-def read_logmel(model_name, input_folder, target=None, tasks=None, channel_num=1, time_sec=1, log_scale=True, time_agg=False):
+def read_logmel(model_name, input_folder, target=None, tasks=None,
+                channel_num=1, time_sec=1, log_scale=True, time_agg=False, model_param=None):
     if 'VGGish' in model_name:
         return read_logmel_torch_vgg(input_folder, target, tasks, channel_num, time_sec, log_scale, time_agg)
+    elif 'AST' in model_name:
+        return read_logmel_torch_ast(input_folder, model_param, target, tasks, channel_num, time_sec, log_scale,
+                                     time_agg)
     else:
         return read_logmel_torch(input_folder, target, tasks, channel_num, time_sec, log_scale, time_agg)
+
+
+def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, time_agg, target,
+                 valid_flag=True, tasks=None):
+    x, y, task = None, None, None
+    for i, input_folder in enumerate(input_folder_list):
+        logger.info(f'Reading Training Folders: {input_folder}')
+
+        if tasks is None:
+            tmp_x, tmp_y = read_logmel(
+                model_name=model_name,
+                input_folder=input_folder,
+                target=target,
+                channel_num=1,
+                time_sec=model_param['time_sec'],
+                time_agg=time_agg,
+                model_param=model_param
+            )
+            x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+            y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+
+        else:
+            tmp_x, tmp_y, tmp_task = read_logmel(
+                model_name=model_name,
+                input_folder=input_folder,
+                target=target,
+                channel_num=1,
+                tasks=tasks,
+                time_sec=model_param['time_sec'],
+                time_agg=time_agg
+            )
+            x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+            y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+            task = tmp_task if i == 0 else torch.cat([task, tmp_task], dim=0)
+
+    # 検証用のデータがいらない場合 (予測のみ行う場合)
+    if not valid_flag:
+        if tasks is None:
+            return x, y
+        else:
+            return x, y, task
+
+    valid_x, valid_y, valid_task = None, None, None
+
+    if valid_folder_list is None:
+        # valid_folder_listがNoneの時はinput_folder_listのデータをランダムで学習用、評価用に分割する
+        tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
+        valid_x, valid_y = x[ts_idx], y[ts_idx]
+        x, y = x[tr_idx], y[tr_idx]
+
+        if tasks is not None:
+            valid_task = task[ts_idx]
+            task = task[tr_idx]
+
+    else:
+        for i, valid_folder in enumerate(valid_folder_list):
+            logger.info(f'Reading Valid Folders: {valid_folder}')
+
+            if tasks is None:
+                tmp_x, tmp_y = read_logmel(
+                    model_name=model_name,
+                    input_folder=valid_folder,
+                    target=target,
+                    channel_num=1,
+                    time_sec=model_param['time_sec'],
+                    time_agg=time_agg,
+                    model_param=model_param
+                )
+                valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+                valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+
+            else:
+                tmp_x, tmp_y, tmp_task = read_logmel(
+                    model_name=model_name,
+                    input_folder=valid_folder,
+                    target=target,
+                    channel_num=1,
+                    tasks=tasks,
+                    time_sec=model_param['time_sec'],
+                    time_agg=time_agg
+                )
+                valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+                valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+                valid_task = tmp_task if i == 0 else torch.cat([valid_task, tmp_task], dim=0)
+
+    if tasks is None:
+        return (x, y), (valid_x, valid_y)
+    else:
+        return (x, y, task), (valid_x, valid_y, valid_task)
 
 
 def audio_crowd_model(model_name, model_param):
@@ -192,46 +332,274 @@ def audio_crowd_model(model_name, model_param):
                           dilation_size=model_param['dilation_size'],
                           layer_num=model_param['layer_num'],
                           inter_ch=model_param['inter_ch'])
-    elif model_name == 'MultiTaskCNN':
-        return MultiTaskCNN(task_num=model_param['task_num'],
-                            freq_num=model_param['freq_num'],
-                            frame_num=model_param['frame_num'],
-                            kernel_size=model_param['kernel_size'],
-                            dilation_size=model_param['dilation_size'],
-                            layer_num=model_param['layer_num'],
-                            inter_ch=model_param['inter_ch'],
-                            pool_size=model_param['pool_size'])
+    elif model_name == 'AreaSpecificCNN':
+        return AreaSpecificCNN(task_num=model_param['task_num'],
+                               freq_num=model_param['freq_num'],
+                               frame_num=model_param['frame_num'],
+                               kernel_size=model_param['kernel_size'],
+                               dilation_size=model_param['dilation_size'],
+                               layer_num=model_param['layer_num'],
+                               inter_ch=model_param['inter_ch'],
+                               pool_size=model_param['pool_size'])
+    elif model_name == 'AreaSpecificCNN2':
+        return AreaSpecificCNN2(task_num=model_param['task_num'],
+                                freq_num=model_param['freq_num'],
+                                frame_num=model_param['frame_num'],
+                                common_kernel_size=model_param['common_kernel_size'],
+                                kernel_size=model_param['kernel_size'],
+                                common_dilation_size=model_param['common_dilation_size'],
+                                dilation_size=model_param['dilation_size'],
+                                common_layer_num=model_param['common_layer_num'],
+                                layer_num=model_param['layer_num'],
+                                common_inter_ch=model_param['common_inter_ch'],
+                                inter_ch=model_param['inter_ch'],
+                                common_pool_size=model_param['common_pool_size'],
+                                pool_size=model_param['pool_size'])
+    elif model_name == 'ASTRegressor':
+        return ASTRegressor(feat_num=model_param['feat_num'],
+                            drop_out=model_param['drop_out'],
+                            model_name=model_param['model_name'],
+                            finetune=model_param['finetune'])
+    else:
+        Exception(f'Model: {model_name} is not implemented.')
+
+
+def trial_from_model_param_setting(trial: optuna.Trial, model_param_setting: dict):
+    model_param_optuna = {}
+    for name, val in model_param_setting.items():
+        if not isinstance(val, dict):
+            model_param_optuna[name] = val
+        else:
+            if val['type'].count('list') == 2:
+                assert isinstance(val['size'], list), f'double list setting: list_size should be list'
+                list_size = [
+                    val['size'][0] if isinstance(val['size'][0], int) else model_param_optuna[val['size'][0]],
+                    val['size'][1] if isinstance(val['size'][1], int) else model_param_optuna[val['size'][1]]
+                ]
+                if 'int' in val['type']:
+                    model_param_optuna[name] = [
+                        [
+                            trial.suggest_int(name=f'{name}_{i0}_{i1}',
+                                              low=val['low'],
+                                              high=val['high'])
+                            for i1 in range(list_size[1])
+                        ]
+                        for i0 in range(list_size[0])
+                    ]
+                elif 'float' in val['size']:
+                    model_param_optuna[name] = [
+                        [
+                            trial.suggest_float(name=f'{name}_{i0}_{i1}',
+                                                low=val['low'],
+                                                high=val['high'])
+                            for i1 in range(list_size[1])
+                        ]
+                        for i0 in range(list_size[0])
+                    ]
+                else:
+                    Exception(f'Invalid model parameter setting, {name}: {val}')
+
+            elif val['type'].count('list') == 1:
+                list_size = val['size'] if isinstance(val['size'], int) else model_param_optuna[val['size']]
+                if 'int' in val['type']:
+                    model_param_optuna[name] = [trial.suggest_int(name=f'{name}_{idx}',
+                                                                  low=val['low'],
+                                                                  high=val['high'])
+                                                for idx in range(list_size)]
+                elif 'float' in val['type']:
+                    model_param_optuna[name] = [trial.suggest_float(name=f'{name}_{idx}',
+                                                                    low=val['low'],
+                                                                    high=val['high'])
+                                                for idx in range(list_size)]
+                else:
+                    Exception(f'Invalid model parameter setting, {name}: {val}')
+
+            elif val['type'].count('list') == 0:
+                if val['type'] == 'int':
+                    model_param_optuna[name] = trial.suggest_int(name=name, low=val['low'], high=val['high'])
+                elif val['type'] == 'float':
+                    model_param_optuna[name] = trial.suggest_float(name=name, low=val['low'], high=val['high'])
+                else:
+                    Exception(f'Invalid model parameter setting, {name}: {val}')
+
+            else:
+                cnt = val['type'].count('list')
+                Exception(f'Invalid type: {cnt} layers list does not work for now.')
+
+    return model_param_optuna
+
+
+def model_param_from_best_trial(model_param_setting: dict, best_params_optuna: dict):
+    """
+    optuna探索結果から最良となったパラメタについて、dict化(listなど)
+    Parameters
+    ----------
+    model_param_setting optunaに設定する際に入力したJSONデータ
+    best_params_optuna optuna探索により得られた最良の結果
+
+    Returns 探索結果のモデルパラメタを格納したJSONデータ
+    -------
+
+    """
+    best_params = {}
+    for name, val in model_param_setting.items():
+        if not isinstance(val, dict):
+            # 探索時の設定ファイル
+            best_params[name] = val
+        else:
+            if val['type'].count('list') == 2:
+                assert isinstance(val['size'], list), f'double list setting: list_size should be list'
+                list_size = []
+                for val_size in val['size']:
+                    if isinstance(val_size, str):
+                        if isinstance(model_param_setting[val_size], int):
+                            # 要素数が固定値でなく、別パラメータを参照しており、またoptunaで探索させていない場合
+                            list_size.append(model_param_setting[val_size])
+                        else:
+                            # optunaで要素数を探索させている場合はoptunaの結果から取得
+                            list_size.append(best_params_optuna[val_size])
+                    else:
+                        # 要素数が固定値の場合
+                        list_size.append(val_size)
+                best_params[name] = [
+                    [
+                        best_params_optuna[f'{name}_{i0}_{i1}']
+                        for i1 in range(list_size[1])
+                    ]
+                    for i0 in range(list_size[0])
+                ]
+
+            elif val['type'].count('list') == 1:
+                if isinstance(val['size'], str):
+                    if isinstance(model_param_setting[val['size']], int):
+                        # 要素数が固定値でなく、別パラメータを参照しており、またoptunaで探索させていない場合
+                        list_size = model_param_setting[val['size']]
+                    else:
+                        # optunaで要素数を探索させている場合はoptunaの結果から取得
+                        list_size = best_params_optuna[val['size']]
+                else:
+                    # 要素数が固定値の場合
+                    list_size = val['size']
+                best_params[name] = [best_params_optuna[f'{name}_{idx}'] for idx in range(list_size)]
+
+            elif val['type'].count('list') == 0:
+                best_params[name] = best_params_optuna[name]
+
+            else:
+                Exception('3重以上のlistにはまだ未対応')
+            # if 'list' in val['type']:
+            #     if isinstance(val['size'], str):
+            #         if isinstance(model_param_setting[val['size']], int):
+            #             # 要素数が固定値でなく、別パラメータを参照しており、またoptunaで探索させていない場合
+            #             list_size = model_param_setting[val['size']]
+            #         else:
+            #             # optunaで要素数を探索させている場合はoptunaの結果から取得
+            #             list_size = best_params_optuna[val['size']]
+            #     else:
+            #         # 要素数が固定値の場合
+            #         list_size = val['size']
+            #     best_params[name] = [best_params_optuna[f'{name}_{idx}'] for idx in range(list_size)]
+            # else:
+            #     best_params[name] = best_params_optuna[name]
+    return best_params
+
+
+def is_valid_model(model_name, model_param):
+    """
+    model_paramでモデルを設定した際に、そのモデルが問題ないか検証する
+
+    Parameters
+    ----------
+    model_name モデル名：現状SimpleCNN2, MultiTaskCNNのみ検証の必要がある
+    model_param モデルパラメタ
+
+    Returns モデルがvalidかどうか
+    -------
+
+    """
+    if model_name == 'SimpleCNN2':
+        return SimpleCNN2.is_valid(
+            frame_num=model_param['frame_num'],
+            freq_num=model_param['freq_num'],
+            kernel_size=model_param['kernel_size'],
+            dilation_size=model_param['dilation_size'],
+            layer_num=model_param['layer_num'],
+            inter_ch=model_param['inter_ch']
+        )
+    elif model_name == 'AreaSpecificCNN':
+        return AreaSpecificCNN.is_valid(
+            task_num=model_param['task_num'],
+            freq_num=model_param['task_num'],
+            frame_num=model_param['frame_num'],
+            kernel_size=model_param['kernel_size'],
+            dilation_size=model_param['dilation_size'],
+            layer_num=model_param['layer_num'],
+            inter_ch=model_param['inter_ch'],
+            pool_size=model_param['pool_size']
+        )
+    elif model_name == 'AreaSpecificCNN2':
+        return AreaSpecificCNN2.is_valid(
+            task_num=model_param['task_num'],
+            freq_num=model_param['freq_num'],
+            frame_num=model_param['frame_num'],
+            common_kernel_size=model_param['common_kernel_size'],
+            kernel_size=model_param['kernel_size'],
+            common_dilation_size=model_param['common_dilation_size'],
+            dilation_size=model_param['dilation_size'],
+            common_layer_num=model_param['common_layer_num'],
+            layer_num=model_param['layer_num'],
+            common_inter_ch=model_param['common_inter_ch'],
+            inter_ch=model_param['inter_ch'],
+            common_pool_size=model_param['common_pool_size'],
+            pool_size=model_param['pool_size']
+        )
+    return True
+
+
+def write_result(folder, target, output, label):
+    target_df = pd.DataFrame(target)
+    target_df.columns = [f'target{i}' for i in range(len(target_df.columns))]
+    output_df = pd.DataFrame(output)
+    output_df.columns = [f'predict{i}' for i in range(len(output_df.columns))]
+    res_df = pd.concat([target_df, output_df], axis=1)
+    res_df.to_csv(f'{folder}/result_{label}.csv', index=False)
+    calculate_accuracy(target, output, f'{folder}/acc_{label}.json')
+    return
 
 
 def audio_crowd_training(input_folder_list, valid_folder_list,
                          model_folder, model_name, model_param, target, epoch, dev=None,
                          log_scale=True, time_agg=False, batch_size=64):
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = get_device(dev)
-    if target is None:
-        target = ['count']
-    assert model_name in MODEL_LIST
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
-    x, y = None, None
-    for i, input_folder in enumerate(input_folder_list):
-        logger.info(f'Reading Training Folders: {input_folder}')
-        tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
-                                   time_sec=model_param['time_sec'], time_agg=time_agg)
-        x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-        y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
-
-    valid_x, valid_y = None, None
-    if valid_folder_list is None:
-        tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
-        valid_x, valid_y = x[ts_idx], y[ts_idx]
-        x, y = x[tr_idx], y[tr_idx]
-    else:
-        for i, valid_folder in enumerate(valid_folder_list):
-            logger.info(f'Reading Valid Folders: {valid_folder}')
-            tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=valid_folder, target=target, channel_num=1,
-                                       time_sec=model_param['time_sec'], time_agg=time_agg)
-            valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-            valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+    (x, y), (valid_x, valid_y) = load_dataset(
+        input_folder_list=input_folder_list,
+        valid_folder_list=valid_folder_list,
+        model_name=model_name,
+        model_param=model_param,
+        time_agg=time_agg,
+        target=target
+    )
+    # x, y = None, None
+    # for i, input_folder in enumerate(input_folder_list):
+    #     logger.info(f'Reading Training Folders: {input_folder}')
+    #     tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
+    #                                time_sec=model_param['time_sec'], time_agg=time_agg)
+    #     x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+    #     y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+    #
+    # valid_x, valid_y = None, None
+    # if valid_folder_list is None:
+    #     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
+    #     valid_x, valid_y = x[ts_idx], y[ts_idx]
+    #     x, y = x[tr_idx], y[tr_idx]
+    # else:
+    #     for i, valid_folder in enumerate(valid_folder_list):
+    #         logger.info(f'Reading Valid Folders: {valid_folder}')
+    #         tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=valid_folder, target=target, channel_num=1,
+    #                                    time_sec=model_param['time_sec'], time_agg=time_agg)
+    #         valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+    #         valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
 
     train_dataset = torch.utils.data.TensorDataset(x.to(device), y.to(device))
     test_dataset = torch.utils.data.TensorDataset(valid_x.to(device), valid_y.to(device))
@@ -270,42 +638,48 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
         target_np = np.exp(target_np) - 1
         output_np = np.exp(output_np) - 1
     scatter_plot(target_np, output_np, f'{model_folder}/scatter.png')
+    write_result(model_folder, target_np, output_np, label=target[0])
     return
 
 
 def audio_crowd_training_multitask(input_folder_list, valid_folder_list,
-                                   model_folder, model_name, model_param, target, epoch, tasks=None, dev=None,
+                                   model_folder, model_name, model_param, target, epoch, weight, tasks=None, dev=None,
                                    log_scale=True, time_agg=False, batch_size=64):
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = get_device(dev)
-    if target is None:
-        target = ['count']
-    assert model_name in MODEL_LIST
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
-    x, y, task = None, None, None
-    for i, input_folder in enumerate(input_folder_list):
-        logger.info(f'Reading Training Folders: {input_folder}')
-        tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=input_folder, target=target,
-                                             channel_num=1, tasks=tasks, time_sec=model_param['time_sec'],
-                                             time_agg=time_agg)
-        x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-        y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
-        task = tmp_task if i == 0 else torch.cat([task, tmp_task], dim=0)
-
-    valid_x, valid_y, valid_task = None, None, None
-    if valid_folder_list is None:
-        tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
-        valid_x, valid_y, valid_task = x[ts_idx], y[ts_idx], task[ts_idx]
-        x, y, task = x[tr_idx], y[tr_idx], task[tr_idx]
-    else:
-        for i, valid_folder in enumerate(valid_folder_list):
-            logger.info(f'Reading Valid Folders: {valid_folder}')
-            tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=valid_folder, target=target,
-                                                 channel_num=1, tasks=tasks, time_sec=model_param['time_sec'],
-                                                 time_agg=time_agg)
-            valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-            valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
-            valid_task = tmp_task if i == 0 else torch.cat([valid_task, tmp_task], dim=0)
+    (x, y, task), (valid_x, valid_y, valid_task) = load_dataset(
+        input_folder_list=input_folder_list,
+        valid_folder_list=valid_folder_list,
+        model_name=model_name,
+        model_param=model_param,
+        time_agg=time_agg,
+        target=target,
+        tasks=tasks
+    )
+    # x, y, task = None, None, None
+    # for i, input_folder in enumerate(input_folder_list):
+    #     logger.info(f'Reading Training Folders: {input_folder}')
+    #     tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=input_folder, target=target,
+    #                                          channel_num=1, tasks=tasks, time_sec=model_param['time_sec'],
+    #                                          time_agg=time_agg)
+    #     x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+    #     y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+    #     task = tmp_task if i == 0 else torch.cat([task, tmp_task], dim=0)
+    #
+    # valid_x, valid_y, valid_task = None, None, None
+    # if valid_folder_list is None:
+    #     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
+    #     valid_x, valid_y, valid_task = x[ts_idx], y[ts_idx], task[ts_idx]
+    #     x, y, task = x[tr_idx], y[tr_idx], task[tr_idx]
+    # else:
+    #     for i, valid_folder in enumerate(valid_folder_list):
+    #         logger.info(f'Reading Valid Folders: {valid_folder}')
+    #         tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=valid_folder, target=target,
+    #                                              channel_num=1, tasks=tasks, time_sec=model_param['time_sec'],
+    #                                              time_agg=time_agg)
+    #         valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+    #         valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+    #         valid_task = tmp_task if i == 0 else torch.cat([valid_task, tmp_task], dim=0)
 
     train_dataset = torch.utils.data.TensorDataset(x.to(device), y.to(device), task.to(device))
     test_dataset = torch.utils.data.TensorDataset(valid_x.to(device), valid_y.to(device), valid_task.to(device))
@@ -325,9 +699,9 @@ def audio_crowd_training_multitask(input_folder_list, valid_folder_list,
     task_train_loss, task_test_loss = [], []
     for ep in range(epoch):
         tr_loss_tmp = model_train_multitask(model, train_dataloader, criterion, task_criterion, optimizer, ep,
-                                            weight=0.5, verbose=True)
+                                            weight=weight, verbose=True)
         ts_loss_tmp = model_test_multitask(model, test_dataloader, criterion, task_criterion, ep,
-                                           weight=0.5, verbose=True)
+                                           weight=weight, verbose=True)
         train_loss.append(tr_loss_tmp[0])
         main_train_loss.append(tr_loss_tmp[1])
         task_train_loss.append(tr_loss_tmp[2])
@@ -335,12 +709,6 @@ def audio_crowd_training_multitask(input_folder_list, valid_folder_list,
         test_loss.append(ts_loss_tmp[0])
         main_test_loss.append(ts_loss_tmp[1])
         task_test_loss.append(ts_loss_tmp[2])
-    # train_loss, test_loss = [], []
-    # for ep in range(epoch):
-    #     tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep)
-    #     ts_loss_tmp = model_test(model, test_dataloader, criterion, ep)
-    #     train_loss.append(tr_loss_tmp)
-    #     test_loss.append(ts_loss_tmp)
 
     if not os.path.exists(model_folder):
         os.makedirs(model_folder, exist_ok=True)
@@ -352,41 +720,63 @@ def audio_crowd_training_multitask(input_folder_list, valid_folder_list,
                     label_list=['Total', 'Main', 'Sub-task'],
                     filename=f'{model_folder}/test_loss.png')
 
-    target_np, output_np = model_predict_multitask(model, train_dataloader, verbose=False)
     torch.save(model.state_dict(), f'{model_folder}/{model_name}_model.pt')
 
-    # target_np, output_np = model_predict(model, train_dataloader)
+    target_np, output_np, target_task_np, output_task_np = model_predict_multitask(model, train_dataloader)
     if log_scale:
         scatter_plot(target_np, output_np, f'{model_folder}/train_scatter_log.png')
+        for i, tsk in enumerate(tasks):
+            scatter_plot(target_task_np[:, i], output_task_np[: ,i],
+                         f'{model_folder}/train_scatter_log_{tsk}.png')
         target_np = np.exp(target_np) - 1
         output_np = np.exp(output_np) - 1
+        target_task_np = np.exp(target_task_np) - 1
+        output_task_np = np.exp(output_task_np) - 1
     scatter_plot(target_np, output_np, f'{model_folder}/train_scatter.png')
+    for i, tsk in enumerate(tasks):
+        scatter_plot(target_task_np[:, i], output_task_np[:, i],
+                     f'{model_folder}/train_scatter_{tsk}.png')
 
-    target_np, output_np = model_predict_multitask(model, test_dataloader)
+    target_np, output_np, target_task_np, output_task_np = model_predict_multitask(model, test_dataloader)
     if log_scale:
         scatter_plot(target_np, output_np, f'{model_folder}/scatter_log.png')
+        for i, tsk in enumerate(tasks):
+            scatter_plot(target_task_np[:, i], output_task_np[:, i],
+                         f'{model_folder}/scatter_log_{tsk}.png')
         target_np = np.exp(target_np) - 1
         output_np = np.exp(output_np) - 1
+        target_task_np = np.exp(target_task_np) - 1
+        output_task_np = np.exp(output_task_np) - 1
     scatter_plot(target_np, output_np, f'{model_folder}/scatter.png')
+    write_result(model_folder, target_np, output_np, label=target[0])
+    for i, tsk in enumerate(tasks):
+        scatter_plot(target_task_np[:, i], output_task_np[:, i],
+                     f'{model_folder}/scatter_{tsk}.png')
+        write_result(model_folder, target_task_np[:, i], output_task_np[:, i], label=tsk)
+
     return
 
 
 def audio_crowd_prediction(input_folder_list, model_folder, model_name, output_folder, model_param, target,
                            dev=None, log_scale=True, time_agg=False, batch_size=64):
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = get_device(dev)
-    if target is None:
-        target = ['count']
-    assert model_name in MODEL_LIST
     logger.info(f'Start {model_name} Prediction: {device} - Columns: {target}')
-
-    x, y = None, None
-    for i, input_folder in enumerate(input_folder_list):
-        logger.info(f'Reading Folders: {input_folder}')
-        tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
-                                   time_sec=model_param['time_sec'], time_agg=time_agg)
-        x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-        y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+    x, y = load_dataset(
+        input_folder_list=input_folder_list,
+        valid_folder_list=None,
+        model_name=model_name,
+        model_param=model_param,
+        time_agg=time_agg,
+        target=target,
+        valid_flag=False
+    )
+    # x, y = None, None
+    # for i, input_folder in enumerate(input_folder_list):
+    #     logger.info(f'Reading Folders: {input_folder}')
+    #     tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
+    #                                time_sec=model_param['time_sec'], time_agg=time_agg)
+    #     x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+    #     y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
     if 'out_features' not in model_param:
         model_param['out_features'] = len(target)
     model = audio_crowd_model(model_name, model_param)
@@ -419,30 +809,35 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
                        model_folder, model_name, model_param, target, epoch, n_trials=1000, sampler='tpe',
                        dev=None, log_scale=True, time_agg=False, batch_size=64):
     device = get_device(dev)
-    if target is None:
-        target = ['count']
-    assert model_name in MODEL_LIST
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
-    x, y = None, None
-    for i, input_folder in enumerate(input_folder_list):
-        logger.info(f'Reading Training Folders: {input_folder}')
-        tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
-                                   time_sec=model_param['time_sec'], time_agg=time_agg)
-        x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-        y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
-
-    valid_x, valid_y = None, None
-    if valid_folder_list is None:
-        tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
-        valid_x, valid_y = x[ts_idx], y[ts_idx]
-        x, y = x[tr_idx], y[tr_idx]
-    else:
-        for i, valid_folder in enumerate(valid_folder_list):
-            logger.info(f'Reading Valid Folders: {valid_folder}')
-            tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=valid_folder, target=target, channel_num=1,
-                                       time_sec=model_param['time_sec'], time_agg=time_agg)
-            valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-            valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+    (x, y), (valid_x, valid_y) = load_dataset(
+        input_folder_list=input_folder_list,
+        valid_folder_list=valid_folder_list,
+        model_name=model_name,
+        model_param=model_param,
+        time_agg=time_agg,
+        target=target
+    )
+    # x, y = None, None
+    # for i, input_folder in enumerate(input_folder_list):
+    #     logger.info(f'Reading Training Folders: {input_folder}')
+    #     tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
+    #                                time_sec=model_param['time_sec'], time_agg=time_agg)
+    #     x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+    #     y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+    #
+    # valid_x, valid_y = None, None
+    # if valid_folder_list is None:
+    #     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
+    #     valid_x, valid_y = x[ts_idx], y[ts_idx]
+    #     x, y = x[tr_idx], y[tr_idx]
+    # else:
+    #     for i, valid_folder in enumerate(valid_folder_list):
+    #         logger.info(f'Reading Valid Folders: {valid_folder}')
+    #         tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=valid_folder, target=target, channel_num=1,
+    #                                    time_sec=model_param['time_sec'], time_agg=time_agg)
+    #         valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+    #         valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
 
     train_dataset = torch.utils.data.TensorDataset(x.to(device), y.to(device))
     test_dataset = torch.utils.data.TensorDataset(valid_x.to(device), valid_y.to(device))
@@ -453,46 +848,53 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
     # model = audio_crowd_model(model_name, model_param).to(device)
 
     def objective(trial: optuna.Trial):
-        model_param_optuna = {}
-        for name, val in model_param.items():
-            if not isinstance(val, dict):
-                model_param_optuna[name] = val
-            else:
-                if 'list' in val['type']:
-                    list_size = val['size'] if isinstance(val['size'], int) else model_param_optuna[val['size']]
-                    if 'int' in val['type']:
-                        model_param_optuna[name] = [trial.suggest_int(name=f'{name}_{idx}',
-                                                                      low=val['low'],
-                                                                      high=val['high'])
-                                                    for idx in range(list_size)]
-                    elif 'float' in val['type']:
-                        model_param_optuna[name] = [trial.suggest_float(name=f'{name}_{idx}',
-                                                                        low=val['low'],
-                                                                        high=val['high'])
-                                                    for idx in range(list_size)]
-                    else:
-                        Exception(f'Invalid model parameter setting, {name}: {val}')
-                else:
-                    if val['type'] == 'int':
-                        model_param_optuna[name] = trial.suggest_int(name=name, low=val['low'], high=val['high'])
-                    elif val['type'] == 'float':
-                        model_param_optuna[name] = trial.suggest_float(name=name, low=val['low'], high=val['high'])
-                    else:
-                        Exception(f'Invalid model parameter setting, {name}: {val}')
-
-        if model_name == 'SimpleCNN2':
-            if not SimpleCNN2.is_valid(frame_num=model_param_optuna['frame_num'],
-                                       freq_num=model_param_optuna['freq_num'],
-                                       kernel_size=model_param_optuna['kernel_size'],
-                                       dilation_size=model_param_optuna['dilation_size'],
-                                       layer_num=model_param_optuna['layer_num'],
-                                       inter_ch=model_param_optuna['inter_ch']):
-                # このtrialは無効としてskip
-                return float('inf')
+        model_param_optuna = trial_from_model_param_setting(trial, model_param)
+        # model_param_optuna = {}
+        # for name, val in model_param.items():
+        #     if not isinstance(val, dict):
+        #         model_param_optuna[name] = val
+        #     else:
+        #         if 'list' in val['type']:
+        #             list_size = val['size'] if isinstance(val['size'], int) else model_param_optuna[val['size']]
+        #             if 'int' in val['type']:
+        #                 model_param_optuna[name] = [trial.suggest_int(name=f'{name}_{idx}',
+        #                                                               low=val['low'],
+        #                                                               high=val['high'])
+        #                                             for idx in range(list_size)]
+        #             elif 'float' in val['type']:
+        #                 model_param_optuna[name] = [trial.suggest_float(name=f'{name}_{idx}',
+        #                                                                 low=val['low'],
+        #                                                                 high=val['high'])
+        #                                             for idx in range(list_size)]
+        #             else:
+        #                 Exception(f'Invalid model parameter setting, {name}: {val}')
+        #         else:
+        #             if val['type'] == 'int':
+        #                 model_param_optuna[name] = trial.suggest_int(name=name, low=val['low'], high=val['high'])
+        #             elif val['type'] == 'float':
+        #                 model_param_optuna[name] = trial.suggest_float(name=name, low=val['low'], high=val['high'])
+        #             else:
+        #                 Exception(f'Invalid model parameter setting, {name}: {val}')
+        #
+        if not is_valid_model(model_name, model_param_optuna):
+            # このtrialは無効としてskip
+            return float('inf')
+        # if model_name == 'SimpleCNN2':
+        #     if not SimpleCNN2.is_valid(
+        #             frame_num=model_param_optuna['frame_num'],
+        #             freq_num=model_param_optuna['freq_num'],
+        #             kernel_size=model_param_optuna['kernel_size'],
+        #             dilation_size=model_param_optuna['dilation_size'],
+        #             layer_num=model_param_optuna['layer_num'],
+        #             inter_ch=model_param_optuna['inter_ch']
+        #     ):
+        #         # このtrialは無効としてskip
+        #         return float('inf')
 
         model = audio_crowd_model(model_name, model_param_optuna).to(device)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+        # optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-05)
         criterion = nn.MSELoss()
 
         train_loss, test_loss = [], []
@@ -520,32 +922,38 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
             target_np = np.exp(target_np) - 1
             output_np = np.exp(output_np) - 1
         scatter_plot(target_np, output_np, f'{each_folder}/scatter.png')
+
+        tried_params = model_param_from_best_trial(model_param, model_param_optuna)
+        with open(f'{each_folder}/model_params.json', 'w') as fp_:
+            json.dump(tried_params, fp_)
         return test_loss[-1]
     optuna_sampler = optuna.samplers.TPESampler(seed=42) if sampler == 'tpe' else optuna.samplers.RandomSampler(seed=42)
     study = optuna.create_study(direction='minimize',
                                 sampler=optuna_sampler,
                                 pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials=n_trials)
-    best_params_optuna = study.best_params
-    best_params = {}
-    for name, val in model_param.items():
-        if not isinstance(val, dict):
-            best_params[name] = val
-        else:
-            if 'list' in val['type']:
-                if isinstance(val['size'], str):
-                    if isinstance(model_param[val['size']], int):
-                        # 要素数が固定値でなく、別パラメータを参照しており、またoptunaで探索させていない場合
-                        list_size = model_param[val['size']]
-                    else:
-                        # optunaで要素数を探索させている場合はoptunaの結果から取得
-                        list_size = best_params_optuna[val['size']]
-                else:
-                    # 要素数が固定値の場合
-                    list_size = val['size']
-                best_params[name] = [best_params_optuna[f'{name}_{idx}'] for idx in range(list_size)]
-            else:
-                best_params[name] = best_params_optuna[name]
+    # best_params_optuna = study.best_params
+    # best_params = {}
+    best_params = model_param_from_best_trial(model_param_setting=model_param,
+                                              best_params_optuna=study.best_params)
+    # for name, val in model_param.items():
+    #     if not isinstance(val, dict):
+    #         best_params[name] = val
+    #     else:
+    #         if 'list' in val['type']:
+    #             if isinstance(val['size'], str):
+    #                 if isinstance(model_param[val['size']], int):
+    #                     # 要素数が固定値でなく、別パラメータを参照しており、またoptunaで探索させていない場合
+    #                     list_size = model_param[val['size']]
+    #                 else:
+    #                     # optunaで要素数を探索させている場合はoptunaの結果から取得
+    #                     list_size = best_params_optuna[val['size']]
+    #             else:
+    #                 # 要素数が固定値の場合
+    #                 list_size = val['size']
+    #             best_params[name] = [best_params_optuna[f'{name}_{idx}'] for idx in range(list_size)]
+    #         else:
+    #             best_params[name] = best_params_optuna[name]
     with open(f'{model_folder}/best_params.json', 'w') as fp:
         json.dump(best_params, fp)
     df = study.trials_dataframe()
@@ -554,37 +962,43 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
 
 
 def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
-                                 model_folder, model_name, model_param, target, tasks, epoch, n_trials=1000,
-                                 dev=None, log_scale=True, time_agg=False, batch_size=64):
+                                 model_folder, model_name, model_param, target, tasks, epoch, weight, n_trials=1000,
+                                 sampler='tpe', dev=None, log_scale=True, time_agg=False, batch_size=64):
     device = get_device(dev)
-    if target is None:
-        target = ['count']
-    assert model_name in MODEL_LIST
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
-    x, y, task = None, None, None
-    for i, input_folder in enumerate(input_folder_list):
-        logger.info(f'Reading Training Folders: {input_folder}')
-        tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=input_folder, target=target,
-                                             tasks=tasks, channel_num=1, time_sec=model_param['time_sec'],
-                                             time_agg=time_agg)
-        x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-        y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
-        task = tmp_task if i == 0 else torch.cat([task, tmp_task], dim=0)
-    
-    valid_x, valid_y, valid_task = None, None, None
-    if valid_folder_list is None:
-        tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
-        valid_x, valid_y, valid_task = x[ts_idx], y[ts_idx], task[ts_idx]
-        x, y, task = x[tr_idx], y[tr_idx], task[tr_idx]
-    else:
-        for i, valid_folder in enumerate(valid_folder_list):
-            logger.info(f'Reading Valid Folders: {valid_folder}')
-            tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=valid_folder, target=target,
-                                                 tasks=tasks, channel_num=1, time_sec=model_param['time_sec'],
-                                                 time_agg=time_agg)
-            valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-            valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
-            valid_task = tmp_task if i == 0 else torch.cat([valid_task, tmp_task], dim=0)
+    (x, y, task), (valid_x, valid_y, valid_task) = load_dataset(
+        input_folder_list=input_folder_list,
+        valid_folder_list=valid_folder_list,
+        model_name=model_name,
+        model_param=model_param,
+        time_agg=time_agg,
+        target=target,
+        tasks=tasks
+    )
+    # x, y, task = None, None, None
+    # for i, input_folder in enumerate(input_folder_list):
+    #     logger.info(f'Reading Training Folders: {input_folder}')
+    #     tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=input_folder, target=target,
+    #                                          tasks=tasks, channel_num=1, time_sec=model_param['time_sec'],
+    #                                          time_agg=time_agg)
+    #     x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+    #     y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+    #     task = tmp_task if i == 0 else torch.cat([task, tmp_task], dim=0)
+    #
+    # valid_x, valid_y, valid_task = None, None, None
+    # if valid_folder_list is None:
+    #     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
+    #     valid_x, valid_y, valid_task = x[ts_idx], y[ts_idx], task[ts_idx]
+    #     x, y, task = x[tr_idx], y[tr_idx], task[tr_idx]
+    # else:
+    #     for i, valid_folder in enumerate(valid_folder_list):
+    #         logger.info(f'Reading Valid Folders: {valid_folder}')
+    #         tmp_x, tmp_y, tmp_task = read_logmel(model_name=model_name, input_folder=valid_folder, target=target,
+    #                                              tasks=tasks, channel_num=1, time_sec=model_param['time_sec'],
+    #                                              time_agg=time_agg)
+    #         valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+    #         valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+    #         valid_task = tmp_task if i == 0 else torch.cat([valid_task, tmp_task], dim=0)
 
     train_dataset = torch.utils.data.TensorDataset(x.to(device), y.to(device), task.to(device))
     test_dataset = torch.utils.data.TensorDataset(valid_x.to(device), valid_y.to(device), valid_task.to(device))
@@ -594,53 +1008,56 @@ def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
         model_param['out_features'] = len(target)
 
     def objective(trial: optuna.Trial):
-        model_param_optuna = {}
-        for name, val in model_param.items():
-            if not isinstance(val, dict):
-                model_param_optuna[name] = val
-            else:
-                # TODO list of listの場合のプログラム、JSON仕様
-                if 'list' in val['type']:
-                    list_size = val['size'] if isinstance(val['size'], int) else model_param_optuna[val['size']]
-                    if 'int' in val['type']:
-                        model_param_optuna[name] = [trial.suggest_int(name=f'{name}_{idx}',
-                                                                      low=val['low'],
-                                                                      high=val['high'])
-                                                    for idx in range(list_size)]
-                    elif 'float' in val['type']:
-                        model_param_optuna[name] = [trial.suggest_float(name=f'{name}_{idx}',
-                                                                        low=val['low'],
-                                                                        high=val['high'])
-                                                    for idx in range(list_size)]
-                    else:
-                        Exception(f'Invalid model parameter setting, {name}: {val}')
-                else:
-                    if val['type'] == 'int':
-                        model_param_optuna[name] = trial.suggest_int(name=name, low=val['low'], high=val['high'])
-                    elif val['type'] == 'float':
-                        model_param_optuna[name] = trial.suggest_float(name=name, low=val['low'], high=val['high'])
-                    else:
-                        Exception(f'Invalid model parameter setting, {name}: {val}')
+        model_param_optuna = trial_from_model_param_setting(trial, model_param)
+        # model_param_optuna = {}
+        # for name, val in model_param.items():
+        #     if not isinstance(val, dict):
+        #         model_param_optuna[name] = val
+        #     else:
+        #         # TODO list of listの場合のプログラム、JSON仕様
+        #         if 'list' in val['type']:
+        #             list_size = val['size'] if isinstance(val['size'], int) else model_param_optuna[val['size']]
+        #             if 'int' in val['type']:
+        #                 model_param_optuna[name] = [trial.suggest_int(name=f'{name}_{idx}',
+        #                                                               low=val['low'],
+        #                                                               high=val['high'])
+        #                                             for idx in range(list_size)]
+        #             elif 'float' in val['type']:
+        #                 model_param_optuna[name] = [trial.suggest_float(name=f'{name}_{idx}',
+        #                                                                 low=val['low'],
+        #                                                                 high=val['high'])
+        #                                             for idx in range(list_size)]
+        #             else:
+        #                 Exception(f'Invalid model parameter setting, {name}: {val}')
+        #         else:
+        #             if val['type'] == 'int':
+        #                 model_param_optuna[name] = trial.suggest_int(name=name, low=val['low'], high=val['high'])
+        #             elif val['type'] == 'float':
+        #                 model_param_optuna[name] = trial.suggest_float(name=name, low=val['low'], high=val['high'])
+        #             else:
+        #                 Exception(f'Invalid model parameter setting, {name}: {val}')
 
-        if model_name == 'SimpleCNN2':
-            if not SimpleCNN2.is_valid(frame_num=model_param_optuna['frame_num'],
-                                       freq_num=model_param_optuna['freq_num'],
-                                       kernel_size=model_param_optuna['kernel_size'],
-                                       dilation_size=model_param_optuna['dilation_size'],
-                                       layer_num=model_param_optuna['layer_num'],
-                                       inter_ch=model_param_optuna['inter_ch']):
-                # このtrialは無効としてskip
-                return float('inf')
-        elif model_name == 'MultiTaskCNN':
-            if not MultiTaskCNN.is_valid(task_num=model_param_optuna['task_num'],
-                                         frame_num=model_param_optuna['frame_num'],
-                                         freq_num=model_param_optuna['freq_num'],
-                                         kernel_size=model_param_optuna['kernel_size'],
-                                         dilation_size=model_param_optuna['dilation_size'],
-                                         layer_num=model_param_optuna['layer_num'],
-                                         inter_ch=model_param_optuna['inter_ch'],
-                                         pool_size=model_param_optuna['pool_size']):
-                return float('inf')
+        if not is_valid_model(model_name, model_param_optuna):
+            return float('inf')
+        # if model_name == 'SimpleCNN2':
+        #     if not SimpleCNN2.is_valid(frame_num=model_param_optuna['frame_num'],
+        #                                freq_num=model_param_optuna['freq_num'],
+        #                                kernel_size=model_param_optuna['kernel_size'],
+        #                                dilation_size=model_param_optuna['dilation_size'],
+        #                                layer_num=model_param_optuna['layer_num'],
+        #                                inter_ch=model_param_optuna['inter_ch']):
+        #         # このtrialは無効としてskip
+        #         return float('inf')
+        # elif model_name == 'MultiTaskCNN':
+        #     if not MultiTaskCNN.is_valid(task_num=model_param_optuna['task_num'],
+        #                                  frame_num=model_param_optuna['frame_num'],
+        #                                  freq_num=model_param_optuna['freq_num'],
+        #                                  kernel_size=model_param_optuna['kernel_size'],
+        #                                  dilation_size=model_param_optuna['dilation_size'],
+        #                                  layer_num=model_param_optuna['layer_num'],
+        #                                  inter_ch=model_param_optuna['inter_ch'],
+        #                                  pool_size=model_param_optuna['pool_size']):
+        #         return float('inf')
 
         model = audio_crowd_model(model_name, model_param_optuna).to(device)
 
@@ -653,9 +1070,9 @@ def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
         task_train_loss, task_test_loss = [], []
         for ep in range(epoch):
             tr_loss_tmp = model_train_multitask(model, train_dataloader, criterion, task_criterion, optimizer, ep,
-                                                weight=0.5, verbose=False)
+                                                weight=weight, verbose=False)
             ts_loss_tmp = model_test_multitask(model, test_dataloader, criterion, task_criterion, ep,
-                                               weight=0.5, verbose=False)
+                                               weight=weight, verbose=False)
             train_loss.append(tr_loss_tmp[0])
             main_train_loss.append(tr_loss_tmp[1])
             task_train_loss.append(tr_loss_tmp[2])
@@ -675,44 +1092,69 @@ def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
                         label_list=['Total', 'Main', 'Sub-task'],
                         filename=f'{each_folder}/test_loss.png')
 
-        target_np, output_np = model_predict_multitask(model, train_dataloader, verbose=False)
+        target_np, output_np, target_task_np, output_task_np = model_predict_multitask(model, train_dataloader,
+                                                                                       verbose=False)
         if log_scale:
             scatter_plot(target_np, output_np, f'{each_folder}/train_scatter_log.png')
+            for i, tsk in enumerate(tasks):
+                scatter_plot(target_task_np[:, i], output_task_np[:, i],
+                             f'{each_folder}/train_scatter_log_{tsk}.png')
             target_np = np.exp(target_np) - 1
             output_np = np.exp(output_np) - 1
+            target_task_np = np.exp(target_task_np) - 1
+            output_task_np = np.exp(output_task_np) - 1
         scatter_plot(target_np, output_np, f'{each_folder}/train_scatter.png')
+        for i, tsk in enumerate(tasks):
+            scatter_plot(target_task_np[:, i], output_task_np[:, i],
+                         f'{each_folder}/train_scatter_{tsk}.png')
 
-        target_np, output_np = model_predict(model, test_dataloader, verbose=False)
+        target_np, output_np, target_task_np, output_task_np = model_predict_multitask(model, test_dataloader,
+                                                                                       verbose=False)
         if log_scale:
             scatter_plot(target_np, output_np, f'{each_folder}/scatter_log.png')
+            for i, tsk in enumerate(tasks):
+                scatter_plot(target_task_np[:, i], output_task_np[:, i],
+                             f'{each_folder}/scatter_log_{tsk}.png')
             target_np = np.exp(target_np) - 1
             output_np = np.exp(output_np) - 1
+            target_task_np = np.exp(target_task_np) - 1
+            output_task_np = np.exp(output_task_np) - 1
         scatter_plot(target_np, output_np, f'{each_folder}/scatter.png')
+        for i, tsk in enumerate(tasks):
+            scatter_plot(target_task_np[:, i], output_task_np[:, i],
+                         f'{each_folder}/scatter_{tsk}.png')
+
+        tried_params = model_param_from_best_trial(model_param, model_param_optuna)
+        with open(f'{each_folder}/model_params.json', 'w') as fp_:
+            json.dump(tried_params, fp_)
         return test_loss[-1]
 
-    study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(seed=42),
+    optuna_sampler = optuna.samplers.TPESampler(seed=42) if sampler == 'tpe' else optuna.samplers.RandomSampler(seed=42)
+    study = optuna.create_study(direction='minimize',
+                                sampler=optuna_sampler,
                                 pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials=n_trials)
-    best_params_optuna = study.best_params
-    best_params = {}
-    for name, val in model_param.items():
-        if not isinstance(val, dict):
-            best_params[name] = val
-        else:
-            if 'list' in val['type']:
-                if isinstance(val['size'], str):
-                    if isinstance(model_param[val['size']], int):
-                        # 要素数が固定値でなく、別パラメータを参照しており、またoptunaで探索させていない場合
-                        list_size = model_param[val['size']]
-                    else:
-                        # optunaで要素数を探索させている場合はoptunaの結果から取得
-                        list_size = best_params_optuna[val['size']]
-                else:
-                    # 要素数が固定値の場合
-                    list_size = val['size']
-                best_params[name] = [best_params_optuna[f'{name}_{idx}'] for idx in range(list_size)]
-            else:
-                best_params[name] = best_params_optuna[name]
+    best_params = model_param_from_best_trial(model_param, study.best_params)
+    # best_params_optuna = study.best_params
+    # best_params = {}
+    # for name, val in model_param.items():
+    #     if not isinstance(val, dict):
+    #         best_params[name] = val
+    #     else:
+    #         if 'list' in val['type']:
+    #             if isinstance(val['size'], str):
+    #                 if isinstance(model_param[val['size']], int):
+    #                     # 要素数が固定値でなく、別パラメータを参照しており、またoptunaで探索させていない場合
+    #                     list_size = model_param[val['size']]
+    #                 else:
+    #                     # optunaで要素数を探索させている場合はoptunaの結果から取得
+    #                     list_size = best_params_optuna[val['size']]
+    #             else:
+    #                 # 要素数が固定値の場合
+    #                 list_size = val['size']
+    #             best_params[name] = [best_params_optuna[f'{name}_{idx}'] for idx in range(list_size)]
+    #         else:
+    #             best_params[name] = best_params_optuna[name]
     with open(f'{model_folder}/best_params.json', 'w') as fp:
         json.dump(best_params, fp)
     df = study.trials_dataframe()
@@ -730,63 +1172,99 @@ if __name__ == '__main__':
 
     with open(args.input_config_json, 'r') as f:
         cf = json.load(f)
+
     if args.option == 'train':
         cf = cf['train']
-        # model_training(cf['train'])
-        audio_crowd_training(input_folder_list=cf['input_folder_list'],
-                             valid_folder_list=cf['valid_folder_list'] if 'valid_folder_list' in cf.keys() else None,
-                             model_folder=cf['model_folder'],
-                             model_name=cf['model_name'],
-                             model_param=cf['model_param'],
-                             target=cf['target'],
-                             epoch=cf['epoch'],
-                             dev=args.device,
-                             batch_size=cf['batch_size'],
-                             log_scale=cf['log_scale'],
-                             time_agg=cf['time_agg'])
+        assert cf['model_name'] in MODEL_LIST
+        audio_crowd_training(
+            input_folder_list=cf['input_folder_list'],
+            valid_folder_list=cf['valid_folder_list'] if 'valid_folder_list' in cf.keys() else None,
+            model_folder=cf['model_folder'],
+            model_name=cf['model_name'],
+            model_param=cf['model_param'],
+            target=['count'] if 'target' not in cf.keys() else cf['target'],
+            epoch=cf['epoch'],
+            dev=args.device,
+            batch_size=cf['batch_size'],
+            log_scale=cf['log_scale'],
+            time_agg=cf['time_agg']
+        )
 
     elif args.option == 'predict':
-        # model_prediction(cf['predict'])
         cf = cf['predict']
-        audio_crowd_prediction(input_folder_list=cf['input_folder_list'],
-                               output_folder=cf['output_folder'],
-                               model_folder=cf['model_folder'],
-                               model_name=cf['model_name'],
-                               model_param=cf['model_param'],
-                               target=cf['target'],
-                               dev=args.device,
-                               batch_size=cf['batch_size'],
-                               log_scale=cf['log_scale'],
-                               time_agg=cf['time_agg'])
+        assert cf['model_name'] in MODEL_LIST
+        audio_crowd_prediction(
+            input_folder_list=cf['input_folder_list'],
+            output_folder=cf['output_folder'],
+            model_folder=cf['model_folder'],
+            model_name=cf['model_name'],
+            model_param=cf['model_param'],
+            target=['count'] if 'target' not in cf.keys() else cf['target'],
+            dev=args.device,
+            batch_size=cf['batch_size'],
+            log_scale=cf['log_scale'],
+            time_agg=cf['time_agg']
+        )
 
     elif args.option == 'tuning':
         cf = cf['optuna']
-        audio_crowd_tuning(input_folder_list=cf['input_folder_list'],
-                           valid_folder_list=cf['valid_folder_list'] if 'valid_folder_list' in cf.keys() else None,
-                           model_folder=cf['model_folder'],
-                           model_name=cf['model_name'],
-                           model_param=cf['model_param'],
-                           target=cf['target'],
-                           epoch=cf['epoch'],
-                           n_trials=cf['n_trials'] if 'n_trials' in cf.keys() else 1000,
-                           sampler=cf['sampler'] if 'sampler' in cf.keys() else 'tpe',
-                           dev=args.device,
-                           batch_size=cf['batch_size'],
-                           log_scale=cf['log_scale'],
-                           time_agg=cf['time_agg'])
+        assert cf['model_name'] in MODEL_LIST
+        audio_crowd_tuning(
+            input_folder_list=cf['input_folder_list'],
+            valid_folder_list=cf['valid_folder_list'] if 'valid_folder_list' in cf.keys() else None,
+            model_folder=cf['model_folder'],
+            model_name=cf['model_name'],
+            model_param=cf['model_param'],
+            target=['count'] if 'target' not in cf.keys() else cf['target'],
+            epoch=cf['epoch'],
+            n_trials=cf['n_trials'] if 'n_trials' in cf.keys() else 1000,
+            sampler=cf['sampler'] if 'sampler' in cf.keys() else 'tpe',
+            dev=args.device,
+            batch_size=cf['batch_size'],
+            log_scale=cf['log_scale'],
+            time_agg=cf['time_agg']
+        )
+
     elif args.option == 'multi_train':
         cf = cf['train']
+        assert cf['model_name'] in MODEL_LIST
         audio_crowd_training_multitask(
             input_folder_list=cf['input_folder_list'],
             valid_folder_list=cf['valid_folder_list'] if 'valid_folder_list' in cf.keys() else None,
             model_folder=cf['model_folder'],
             model_name=cf['model_name'],
             model_param=cf['model_param'],
-            target=cf['target'],
+            target=['count'] if 'target' not in cf.keys() else cf['target'],
             epoch=cf['epoch'],
+            weight=cf['weight'],
             tasks=cf['tasks'],
             dev=args.device,
             batch_size=cf['batch_size'],
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
+
+    elif args.option == 'multi_predict':
+        pass
+
+    elif args.option == 'multi_tuning':
+        cf = cf['optuna']
+        assert cf['model_name'] in MODEL_LIST
+        audio_crowd_tuning_multitask(
+            input_folder_list=cf['input_folder_list'],
+            valid_folder_list=cf['valid_folder_list'] if 'valid_folder_list' in cf.keys() else None,
+            model_folder=cf['model_folder'],
+            model_name=cf['model_name'],
+            model_param=cf['model_param'],
+            target=['count'] if 'target' not in cf.keys() else cf['target'],
+            epoch=cf['epoch'],
+            n_trials=cf['n_trials'] if 'n_trials' in cf.keys() else 1000,
+            sampler=cf['sampler'] if 'sampler' in cf.keys() else 'tpe',
+            weight=cf['weight'],
+            tasks=cf['tasks'],
+            dev=args.device,
+            batch_size=cf['batch_size'],
+            log_scale=cf['log_scale'],
+            time_agg=cf['time_agg']
+        )
+        pass

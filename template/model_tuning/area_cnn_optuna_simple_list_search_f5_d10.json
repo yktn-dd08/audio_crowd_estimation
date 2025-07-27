@@ -11,29 +11,29 @@
         "valid_folder_list": [
             "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
         ],
-        "model_folder": "./workspace/optuna/asphalt/MultiTaskCNN_f5_d10_layer3",
+        "model_folder": "./workspace/model/asphalt/MultiTaskCNN_f5_d10_layer3",
         "model_name": "MultiTaskCNN",
         "target": ["distance_10"],
-        "tasks": ["range_0-2", "range_2-4", "range_4-6", "range_6-8", "range_8-10"],
+        "tasks": ["range_0-1", "range_1-2", "range_2-3", "range_3-4", "range_4-5", "range_5-6", "range_6-7", "range_7-8", "range_8-9", "range_9-10"],
         "batch_size": 64,
-        "n_trials": 5000,
+        "n_trials": 1000,
         "model_param": {
             "time_sec": 5,
             "frame_num": 501,
             "freq_num": 64,
 
             "layer_num": 3,
-            "task_num": 5,
+            "task_num": 10,
             "kernel_size": {
                 "type": "list[int]",
-                "size": "layer_num",
-                "high": 31,
+                "size": "task_num",
+                "high": 9,
                 "low": 3
             },
             "dilation_size": {
                 "type": "list[int]",
-                "size": "layer_num",
-                "high": 11,
+                "size": "task_num",
+                "high": 10,
                 "low": 1
             },
             "inter_ch": {
@@ -43,12 +43,13 @@
                 "low": 2
             },
             "pool_size": {
-                "type": "list[int]",
-                "size": "layer_num",
-                "high": 3,
+                "type": "list[list[int]]",
+                "size": ["task_num", "layer_num"],
+                "high": 2,
                 "low": 1
             }
         },
+        "weight": 10.0,
         "epoch": 50,
         "log_scale": true,
         "time_agg": true

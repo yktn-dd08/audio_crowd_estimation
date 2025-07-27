@@ -1,5 +1,5 @@
 {
-    "optuna": {
+    "train": {
         "input_folder_list": [
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_09",
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
@@ -11,35 +11,20 @@
         "valid_folder_list": [
             "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
         ],
-        "model_folder": "./workspace/optuna/asphalt/SimpleCNN2_f10_d3",
-        "model_name": "SimpleCNN2",
-        "target": ["distance_3"],
+        "model_folder": "./workspace/model/asphalt/AST_f5_d10",
+        "model_name": "ASTRegressor",
+        "target": ["distance_10"],
         "batch_size": 64,
-        "n_trials": 500,
         "model_param": {
-            "time_sec": 10,
-            "frame_num": 1001,
-            "freq_num": 64,
-
-            "layer_num": 3,
-            "kernel_size": {
-                "type": "int",
-                "high": 31,
-                "low": 3
-            },
-            "dilation_size": {
-                "type": "int",
-                "high": 11,
-                "low": 1
-            },
-            "inter_ch": {
-                "type": "int",
-                "high": 16,
-                "low": 2
-            }
+            "time_sec": 5,
+            "feat_num": 128,
+            "drop_out": 0.3,
+            "model_name": "MIT/ast-finetuned-audioset-10-10-0.4593",
+            "finetune": false
         },
-        "epoch": 50,
+        "epoch": 10,
         "log_scale": true,
         "time_agg": true
     }
 }
+
