@@ -38,7 +38,7 @@
 
             "token_dim": {
                 "type": "int",
-                "high": 32,
+                "high": 10,
                 "low": 2
             },
             "n_head": {

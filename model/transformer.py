@@ -67,6 +67,7 @@ class Conv1dTransformer(nn.Module):
                  feat_num=128, out_features=1):
         super(Conv1dTransformer, self).__init__()
         # 1D-CNN
+        token_dim = token_dim * n_head
         self.conv = nn.Sequential(
             nn.Conv1d(in_channels=freq_num, out_channels=token_dim, kernel_size=kernel_size, dilation=dilation_size),
             nn.ReLU(),
