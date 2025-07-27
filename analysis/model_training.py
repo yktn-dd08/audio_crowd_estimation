@@ -22,7 +22,7 @@ from analysis.model_common import *
 
 FS = 16000
 MODEL_LIST = ['VGGishLinear', 'VGGishTransformer', 'SimpleCNN', 'SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2',
-              'ASTRegressor']
+              'ASTRegressor', 'Conv1dTransformer']
 SAMPLER_LIST = ['random', 'tpe']
 TASK_PATTERN = r'range_(\d+)-(\d+)'
 logger = get_logger('analysis.model_training')
@@ -360,6 +360,19 @@ def audio_crowd_model(model_name, model_param):
                             drop_out=model_param['drop_out'],
                             model_name=model_param['model_name'],
                             finetune=model_param['finetune'])
+    elif model_name == 'Conv1dTransformer':
+        return Conv1dTransformer(freq_num=model_param['freq_num'],
+                                 frame_num=model_param['frame_num'],
+                                 kernel_size=model_param['kernel_size'],
+                                 dilation_size=model_param['dilation_size'],
+                                 pool_size=model_param['pool_size'],
+                                 token_dim=model_param['token_dim'],
+                                 n_head=model_param['n_head'],
+                                 dff_times=model_param['dff_times'],
+                                 drop_out=model_param['drop_out'],
+                                 layer_num=model_param['layer_num'],
+                                 pe_flag=model_param['pe_flag'],
+                                 feat_num=model_param['feat_num'])
     else:
         Exception(f'Model: {model_name} is not implemented.')
 
