@@ -1,5 +1,5 @@
 {
-    "train": {
+    "optuna": {
         "input_folder_list": [
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_09",
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
