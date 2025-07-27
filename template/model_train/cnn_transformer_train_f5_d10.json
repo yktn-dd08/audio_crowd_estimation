@@ -26,7 +26,6 @@
 
             "token_dim": 128,
             "n_head": 4,
-            "dff_times": 4,
             "drop_out": 0.1,
             "layer_num": 1,
             "pe_flag": true,

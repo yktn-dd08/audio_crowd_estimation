@@ -63,7 +63,7 @@ class Conv1dTransformer(nn.Module):
     x: Tensor [batch_size x freq_num x frame_num]
     """
     def __init__(self, freq_num, frame_num, kernel_size, dilation_size, pool_size,
-                 token_dim=128, n_head=4, dff_times=4, drop_out=0.1, layer_num=1, pe_flag=True,
+                 token_dim=128, n_head=4, drop_out=0.1, layer_num=1, pe_flag=True,
                  feat_num=128, out_features=1):
         super(Conv1dTransformer, self).__init__()
         # 1D-CNN
@@ -81,7 +81,7 @@ class Conv1dTransformer(nn.Module):
 
         # Transformer
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=token_dim, nhead=n_head, dim_feedforward=token_dim*dff_times, dropout=drop_out, batch_first=True
+            d_model=token_dim, nhead=n_head, dim_feedforward=token_dim*n_head, dropout=drop_out, batch_first=True
         )
         self.transformer = nn.TransformerEncoder(encoder_layer=encoder_layer, num_layers=layer_num)
 

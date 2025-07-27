@@ -46,11 +46,6 @@
                 "high": 10,
                 "low": 2
             },
-            "dff_times": {
-                "type": "int",
-                "high": 5,
-                "low": 1
-            },
             "drop_out": {
                 "type": "float",
                 "high": 0.5,

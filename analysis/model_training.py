@@ -368,7 +368,6 @@ def audio_crowd_model(model_name, model_param):
                                  pool_size=model_param['pool_size'],
                                  token_dim=model_param['token_dim'],
                                  n_head=model_param['n_head'],
-                                 dff_times=model_param['dff_times'],
                                  drop_out=model_param['drop_out'],
                                  layer_num=model_param['layer_num'],
                                  pe_flag=model_param['pe_flag'],
