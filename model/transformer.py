@@ -49,7 +49,10 @@ class SinusoidalPositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-torch.log(torch.tensor(10000.0)) / d_model))
 
         pe[:, 0::2] = torch.sin(position * div_term)  # 偶数次元
-        pe[:, 1::2] = torch.cos(position * div_term)  # 奇数次元
+        if d_model % 2 == 1:
+            pe[:, 1::2] = torch.cos(position * div_term)[:, :-1]  # 奇数次元
+        else:
+            pe[:, 1::2] = torch.cos(position * div_term)  # 奇数次元
         self.pe = pe.unsqueeze(0)  # [1, T, D]
 
     def forward(self, x):
