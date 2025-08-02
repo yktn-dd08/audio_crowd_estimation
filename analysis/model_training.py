@@ -15,6 +15,7 @@ from sklearn.model_selection import train_test_split
 from model.cnn_model import *
 from model.transformer import *
 from model.vggish_model import *
+from model.base_model import *
 from torchaudio.prototype.pipelines import VGGISH
 from common.logger import get_logger
 from analysis.model_common import *
@@ -22,7 +23,7 @@ from analysis.model_common import *
 
 FS = 16000
 MODEL_LIST = ['VGGishLinear', 'VGGishTransformer', 'SimpleCNN', 'SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2',
-              'ASTRegressor', 'Conv1dTransformer']
+              'ASTRegressor', 'Conv1dTransformer', 'LeastSquareModel']
 SAMPLER_LIST = ['random', 'tpe']
 TASK_PATTERN = r'range_(\d+)-(\d+)'
 logger = get_logger('analysis.model_training')
@@ -372,6 +373,8 @@ def audio_crowd_model(model_name, model_param):
                                  layer_num=model_param['layer_num'],
                                  pe_flag=model_param['pe_flag'],
                                  feat_num=model_param['feat_num'])
+    elif model_name == 'LeastSquareModel':
+        return LeastSquareModel()
     else:
         Exception(f'Model: {model_name} is not implemented.')
 
@@ -398,12 +401,21 @@ def trial_from_model_param_setting(trial: optuna.Trial, model_param_setting: dic
                         ]
                         for i0 in range(list_size[0])
                     ]
-                elif 'float' in val['size']:
+                elif 'float' in val['type']:
                     model_param_optuna[name] = [
                         [
                             trial.suggest_float(name=f'{name}_{i0}_{i1}',
                                                 low=val['low'],
                                                 high=val['high'])
+                            for i1 in range(list_size[1])
+                        ]
+                        for i0 in range(list_size[0])
+                    ]
+                elif 'category' in val['type']:
+                    model_param_optuna[name] = [
+                        [
+                            trial.suggest_categorical(name=f'{name}_{i0}_{i1}',
+                                                      choices=val['category'])
                             for i1 in range(list_size[1])
                         ]
                         for i0 in range(list_size[0])
@@ -423,6 +435,10 @@ def trial_from_model_param_setting(trial: optuna.Trial, model_param_setting: dic
                                                                     low=val['low'],
                                                                     high=val['high'])
                                                 for idx in range(list_size)]
+                elif 'category' in val['type']:
+                    model_param_optuna[name] = [trial.suggest_categorical(name=f'{name}_{idx}',
+                                                                          choices=val['category'])
+                                                for idx in range(list_size)]
                 else:
                     Exception(f'Invalid model parameter setting, {name}: {val}')
 
@@ -431,6 +447,8 @@ def trial_from_model_param_setting(trial: optuna.Trial, model_param_setting: dic
                     model_param_optuna[name] = trial.suggest_int(name=name, low=val['low'], high=val['high'])
                 elif val['type'] == 'float':
                     model_param_optuna[name] = trial.suggest_float(name=name, low=val['low'], high=val['high'])
+                elif val['type'] == 'category':
+                    model_param_optuna[name] = trial.suggest_categorical(name=name, choices=val['category'])
                 else:
                     Exception(f'Invalid model parameter setting, {name}: {val}')
 
@@ -622,7 +640,9 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
         model_param['out_features'] = len(target)
     model = audio_crowd_model(model_name, model_param).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+    lr = 1e-5 if 'lr' not in model_param.keys() else model_param['lr']
+    weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.MSELoss()
 
     train_loss, test_loss = [], []
@@ -861,52 +881,16 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
 
     def objective(trial: optuna.Trial):
         model_param_optuna = trial_from_model_param_setting(trial, model_param)
-        # model_param_optuna = {}
-        # for name, val in model_param.items():
-        #     if not isinstance(val, dict):
-        #         model_param_optuna[name] = val
-        #     else:
-        #         if 'list' in val['type']:
-        #             list_size = val['size'] if isinstance(val['size'], int) else model_param_optuna[val['size']]
-        #             if 'int' in val['type']:
-        #                 model_param_optuna[name] = [trial.suggest_int(name=f'{name}_{idx}',
-        #                                                               low=val['low'],
-        #                                                               high=val['high'])
-        #                                             for idx in range(list_size)]
-        #             elif 'float' in val['type']:
-        #                 model_param_optuna[name] = [trial.suggest_float(name=f'{name}_{idx}',
-        #                                                                 low=val['low'],
-        #                                                                 high=val['high'])
-        #                                             for idx in range(list_size)]
-        #             else:
-        #                 Exception(f'Invalid model parameter setting, {name}: {val}')
-        #         else:
-        #             if val['type'] == 'int':
-        #                 model_param_optuna[name] = trial.suggest_int(name=name, low=val['low'], high=val['high'])
-        #             elif val['type'] == 'float':
-        #                 model_param_optuna[name] = trial.suggest_float(name=name, low=val['low'], high=val['high'])
-        #             else:
-        #                 Exception(f'Invalid model parameter setting, {name}: {val}')
-        #
         if not is_valid_model(model_name, model_param_optuna):
             # このtrialは無効としてskip
             return float('inf')
-        # if model_name == 'SimpleCNN2':
-        #     if not SimpleCNN2.is_valid(
-        #             frame_num=model_param_optuna['frame_num'],
-        #             freq_num=model_param_optuna['freq_num'],
-        #             kernel_size=model_param_optuna['kernel_size'],
-        #             dilation_size=model_param_optuna['dilation_size'],
-        #             layer_num=model_param_optuna['layer_num'],
-        #             inter_ch=model_param_optuna['inter_ch']
-        #     ):
-        #         # このtrialは無効としてskip
-        #         return float('inf')
 
         model = audio_crowd_model(model_name, model_param_optuna).to(device)
 
         # optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-05)
+        lr = 1e-5 if 'lr' not in model_param.keys() else model_param['lr']
+        weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = nn.MSELoss()
 
         train_loss, test_loss = [], []
@@ -927,6 +911,7 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
             target_np = np.exp(target_np) - 1
             output_np = np.exp(output_np) - 1
         scatter_plot(target_np, output_np, f'{each_folder}/train_scatter.png')
+        write_result(each_folder, target_np, output_np, f'train_trial_{trial._trial_id}')
 
         target_np, output_np = model_predict(model, test_dataloader, verbose=False)
         if log_scale:
@@ -934,11 +919,14 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
             target_np = np.exp(target_np) - 1
             output_np = np.exp(output_np) - 1
         scatter_plot(target_np, output_np, f'{each_folder}/scatter.png')
+        write_result(each_folder, target_np, output_np, f'trial_{trial._trial_id}')
 
         tried_params = model_param_from_best_trial(model_param, model_param_optuna)
         with open(f'{each_folder}/model_params.json', 'w') as fp_:
             json.dump(tried_params, fp_)
+
         return test_loss[-1]
+
     optuna_sampler = optuna.samplers.TPESampler(seed=42) if sampler == 'tpe' else optuna.samplers.RandomSampler(seed=42)
     study = optuna.create_study(direction='minimize',
                                 sampler=optuna_sampler,

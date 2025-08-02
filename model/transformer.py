@@ -60,15 +60,33 @@ class SinusoidalPositionalEncoding(nn.Module):
         return x
 
 
+class AttentionPooling(nn.Module):
+    def __init__(self, input_dim):
+        super().__init__()
+        self.attn = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.Tanh(),
+            nn.Linear(128, 1)
+        )
+
+    def forward(self, x):  # x: [B, T, D]
+        weights = self.attn(x).squeeze(-1)  # [B, T]
+        weights = torch.softmax(weights, dim=1)
+        return (x * weights.unsqueeze(-1)).sum(dim=1)  # [B, D]
+
+
 class Conv1dTransformer(nn.Module):
     """
     1D-CNN + Transformer model
     x: Tensor [batch_size x freq_num x frame_num]
     """
     def __init__(self, freq_num, frame_num, kernel_size, dilation_size, pool_size,
-                 token_dim=128, n_head=4, drop_out=0.1, layer_num=1, pe_flag=True,
+                 token_dim=128, n_head=4, drop_out=0.1, layer_num=1, pe_flag=True, pool_type='average',
                  feat_num=128, out_features=1):
         super(Conv1dTransformer, self).__init__()
+        assert pool_type in ['max', 'average', 'attention']
+        self.pool_type = pool_type
+
         # 1D-CNN
         token_dim = token_dim * n_head
         self.conv = nn.Sequential(
@@ -89,6 +107,9 @@ class Conv1dTransformer(nn.Module):
         )
         self.transformer = nn.TransformerEncoder(encoder_layer=encoder_layer, num_layers=layer_num)
 
+        # Attention Pooling
+        self.attn_pool = AttentionPooling(input_dim=token_dim)
+
         # Regression
         self.regressor = nn.Sequential(
             nn.Linear(in_features=token_dim, out_features=feat_num),
@@ -98,12 +119,30 @@ class Conv1dTransformer(nn.Module):
         )
 
     def forward(self, x):
-        # x: batch_size x freq_num x frame_num
-        x = self.conv(x)  # x: batch_size x token_dim x conv_time
-        x = x.transpose(1, 2)  # x: batch_size x conv_time x token_dim
+        # 1D-CNN
+        # x: batch_size x freq_num x frame_num -> batch_size x token_dim x conv_time
+        x = self.conv(x)
+
+        # Transpose for transformer input
+        # x: batch_size x token_dim x conv_time -> batch_size x conv_time x token_dim
+        x = x.transpose(1, 2)
+
+        # Transformer
+        # x: batch_size x conv_time x token_dim -> batch_size x conv_time x token_dim
         if self.pe_flag:
             x = self.pos_encoding(x)
-        x = self.transformer(x)  # x: batch_size x conv_time x token_dim
-        x = x.mean(dim=1)  # x: batch_size x token_dim
+        x = self.transformer(x)
+
+        # Pooling
+        # x: batch_size x conv_time x token_dim -> batch_size x token_dim
+        if self.pool_type == 'average':
+            x = x.mean(dim=1)
+        elif self.pool_type == 'max':
+            x = x.max(dim=1)
+        elif self.pool_type == 'attention':
+            x = self.attn_pool(x)
+
+        # Regression
+        # x: batch_size x token_dim -> batch_size x out_features
         x = self.regressor(x)
         return x

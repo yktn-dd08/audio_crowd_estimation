@@ -1,0 +1,51 @@
+{
+    "train": {
+        "input_folder_list": [
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_09",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_11",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_12",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_13",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_14",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_15",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_16",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_17",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_18",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_19",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_20",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_21",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_22",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_23"
+        ],
+        "valid_folder_list": [
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_15"
+        ],
+        "model_folder": "./workspace/model/asphalt/Conv1dTransformer_f5_d3",
+        "model_name": "Conv1dTransformer",
+        "target": ["distance_3"],
+        "batch_size": 64,
+        "model_param": {
+            "time_sec": 5,
+            "frame_num": 501,
+            "freq_num": 64,
+
+            "kernel_size": 19,
+            "dilation_size": 7,
+            "pool_size": 1,
+
+            "token_dim": 128,
+            "n_head": 8,
+            "drop_out": 0.05905775792450846,
+            "layer_num": 2,
+            "pe_flag": true,
+            "feat_num": 128,
+            "out_features": 1,
+
+            "lr": 0.00001,
+            "weight_decay": 0.0
+        },
+        "epoch": 50,
+        "log_scale": true,
+        "time_agg": true
+    }
+}

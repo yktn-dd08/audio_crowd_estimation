@@ -167,5 +167,6 @@ workspace/
 *.sh
 .DS_Store
 script/
+trash/
 
 .python-version

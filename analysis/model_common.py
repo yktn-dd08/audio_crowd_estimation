@@ -1,5 +1,7 @@
 import enum
 import json
+import math
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -191,9 +193,10 @@ def scatter_plot(target, output, filename):
 
 
 def calculate_accuracy(target_np, output_np, json_path):
-    acc = {'corr': float(np.corrcoef(target_np, output_np)[0, 1]),
+    acc = {'corr': float(np.corrcoef(target_np, output_np)[1, 0]),
            'mae': float(mean_absolute_error(target_np, output_np)),
            'mse': float(mean_squared_error(target_np, output_np)),
+           'rmse': float(mean_squared_error(target_np, output_np)) ** 0.5,
            'mape': float(mean_absolute_percentage_error(target_np, output_np))}
     with open(json_path, 'w') as f:
         json.dump(acc, f, indent=4)
