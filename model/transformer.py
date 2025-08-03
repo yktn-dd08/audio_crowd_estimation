@@ -81,14 +81,16 @@ class Conv1dTransformer(nn.Module):
     x: Tensor [batch_size x freq_num x frame_num]
     """
     def __init__(self, freq_num, frame_num, kernel_size, dilation_size, pool_size,
-                 token_dim=128, n_head=4, drop_out=0.1, layer_num=1, pe_flag=True, pool_type='average',
+                 token_dim=8, n_head=2, dff_times=4, drop_out=0.1, layer_num=1, pe_flag=True, pool_type='average',
                  feat_num=128, out_features=1):
         super(Conv1dTransformer, self).__init__()
         assert pool_type in ['max', 'average', 'attention']
         self.pool_type = pool_type
 
         # 1D-CNN
-        token_dim = token_dim * n_head
+        # token_dim = token_dim * n_head
+        token_dim = 2 ** token_dim
+        n_head = 2 ** n_head
         self.conv = nn.Sequential(
             nn.Conv1d(in_channels=freq_num, out_channels=token_dim, kernel_size=kernel_size, dilation=dilation_size),
             nn.ReLU(),
@@ -103,7 +105,7 @@ class Conv1dTransformer(nn.Module):
 
         # Transformer
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=token_dim, nhead=n_head, dim_feedforward=token_dim*n_head, dropout=drop_out, batch_first=True
+            d_model=token_dim, nhead=n_head, dim_feedforward=token_dim*dff_times, dropout=drop_out, batch_first=True
         )
         self.transformer = nn.TransformerEncoder(encoder_layer=encoder_layer, num_layers=layer_num)
 
