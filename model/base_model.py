@@ -12,7 +12,9 @@ class LeastSquareModel(nn.Module):
     def forward(self, x):
         if self.power:
             x = torch.exp(x)
-        x = x.sum(axis=[1, 2]).unsqueeze(1)
+        x = x.mean(axis=[1, 2]).unsqueeze(1)
+        if self.power:
+            x = torch.log(x)
         x = self.linear(x)
         if self.log:
             x = torch.log(x)

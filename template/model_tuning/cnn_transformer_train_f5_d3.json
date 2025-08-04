@@ -18,9 +18,9 @@
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_23"
         ],
         "valid_folder_list": [
-            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_15"
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_14"
         ],
-        "model_folder": "./workspace/model/asphalt/Conv1dTransformer_f5_d3",
+        "model_folder": "./workspace/model/optuna/asphalt/Conv1dTransformer_f5_d3",
         "model_name": "Conv1dTransformer",
         "target": ["distance_3"],
         "batch_size": 64,
@@ -83,8 +83,9 @@
             },
             "out_features": 1,
 
-            "lr": 0.00001,
-            "weight_decay": 0.0
+            "lr": 0.000001,
+            "weight_decay": 0.0,
+            "criterion": "MAE"
         },
         "n_trials": 500,
         "epoch": 50,

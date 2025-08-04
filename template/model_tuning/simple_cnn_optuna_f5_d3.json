@@ -6,17 +6,25 @@
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_11",
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_12",
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_13",
-            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_14"
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_14",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_15",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_16",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_17",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_18",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_19",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_20",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_21",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_22",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_23"
         ],
         "valid_folder_list": [
-            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_14"
         ],
-        "model_folder": "./workspace/optuna/asphalt/SimpleCNN2_f5_d10_layer3_random",
+        "model_folder": "./workspace/optuna/asphalt/SimpleCNN2_f5_d3_layer3",
         "model_name": "SimpleCNN2",
-        "target": ["distance_10"],
+        "target": ["distance_3"],
         "batch_size": 64,
-        "n_trials": 5000,
-        "sampler": "random",
+        "n_trials": 1000,
         "model_param": {
             "time_sec": 5,
             "frame_num": 501,
@@ -46,7 +54,10 @@
                 "size": "layer_num",
                 "high": 3,
                 "low": 1
-            }
+            },
+            "lr": 0.00001,
+            "weight_decay": 0.0,
+            "criterion": "MAE"
         },
         "epoch": 50,
         "log_scale": true,

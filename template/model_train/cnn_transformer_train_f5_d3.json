@@ -42,7 +42,8 @@
             "out_features": 1,
 
             "lr": 0.000001,
-            "weight_decay": 0.0
+            "weight_decay": 0.0,
+            "criterion": "MAE"
         },
         "epoch": 50,
         "log_scale": true,

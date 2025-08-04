@@ -10,6 +10,7 @@ import pandas as pd
 import scipy as sp
 import torch
 import torch.nn as nn
+from inspect import signature
 from sklearn.model_selection import train_test_split
 
 from model.cnn_model import *
@@ -25,6 +26,7 @@ FS = 16000
 MODEL_LIST = ['VGGishLinear', 'VGGishTransformer', 'SimpleCNN', 'SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2',
               'ASTRegressor', 'Conv1dTransformer', 'LeastSquareModel']
 SAMPLER_LIST = ['random', 'tpe']
+LOSS_LIST = ['MAE', 'MSE']
 TASK_PATTERN = r'range_(\d+)-(\d+)'
 logger = get_logger('analysis.model_training')
 
@@ -310,73 +312,83 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
 
 
 def audio_crowd_model(model_name, model_param):
-    if model_name == 'VGGishLinear':
-        return VGGishLinear2(frame_num=model_param['time_sec'],
-                             out_features=model_param['out_features'],
-                             pre_trained=model_param['pre_trained'])
-    elif model_name == 'VGGishTransformer':
-        return VGGishTransformer(frame_num=model_param['time_sec'],
-                                 token_dim=model_param['token_dim'],
-                                 n_head=model_param['n_head'],
-                                 h_dim=model_param['h_dim'],
-                                 layer_num=model_param['layer_num'],
-                                 out_features=model_param['out_features'],
-                                 pre_trained=model_param['pre_trained'])
-    elif model_name == 'SimpleCNN':
-        return SimpleCNN(frame_num=model_param['frame_num'],
-                         freq_num=model_param['freq_num'],
-                         kernel_size=model_param['kernel_size'])
-    elif model_name == 'SimpleCNN2':
-        return SimpleCNN2(frame_num=model_param['frame_num'],
-                          freq_num=model_param['freq_num'],
-                          kernel_size=model_param['kernel_size'],
-                          dilation_size=model_param['dilation_size'],
-                          layer_num=model_param['layer_num'],
-                          inter_ch=model_param['inter_ch'])
-    elif model_name == 'AreaSpecificCNN':
-        return AreaSpecificCNN(task_num=model_param['task_num'],
-                               freq_num=model_param['freq_num'],
-                               frame_num=model_param['frame_num'],
-                               kernel_size=model_param['kernel_size'],
-                               dilation_size=model_param['dilation_size'],
-                               layer_num=model_param['layer_num'],
-                               inter_ch=model_param['inter_ch'],
-                               pool_size=model_param['pool_size'])
-    elif model_name == 'AreaSpecificCNN2':
-        return AreaSpecificCNN2(task_num=model_param['task_num'],
-                                freq_num=model_param['freq_num'],
-                                frame_num=model_param['frame_num'],
-                                common_kernel_size=model_param['common_kernel_size'],
-                                kernel_size=model_param['kernel_size'],
-                                common_dilation_size=model_param['common_dilation_size'],
-                                dilation_size=model_param['dilation_size'],
-                                common_layer_num=model_param['common_layer_num'],
-                                layer_num=model_param['layer_num'],
-                                common_inter_ch=model_param['common_inter_ch'],
-                                inter_ch=model_param['inter_ch'],
-                                common_pool_size=model_param['common_pool_size'],
-                                pool_size=model_param['pool_size'])
-    elif model_name == 'ASTRegressor':
-        return ASTRegressor(feat_num=model_param['feat_num'],
-                            drop_out=model_param['drop_out'],
-                            model_name=model_param['model_name'],
-                            finetune=model_param['finetune'])
-    elif model_name == 'Conv1dTransformer':
-        return Conv1dTransformer(freq_num=model_param['freq_num'],
-                                 frame_num=model_param['frame_num'],
-                                 kernel_size=model_param['kernel_size'],
-                                 dilation_size=model_param['dilation_size'],
-                                 pool_size=model_param['pool_size'],
-                                 token_dim=model_param['token_dim'],
-                                 n_head=model_param['n_head'],
-                                 drop_out=model_param['drop_out'],
-                                 layer_num=model_param['layer_num'],
-                                 pe_flag=model_param['pe_flag'],
-                                 feat_num=model_param['feat_num'])
-    elif model_name == 'LeastSquareModel':
-        return LeastSquareModel()
-    else:
-        Exception(f'Model: {model_name} is not implemented.')
+    assert model_name in MODEL_LIST, f'You can choose model: {MODEL_LIST}.'
+    func = eval(model_name)
+    # if model_name == 'VGGishLinear':
+    #     func = VGGishLinear2
+    #     # return VGGishLinear2(frame_num=model_param['time_sec'],
+    #     #                      out_features=model_param['out_features'],
+    #     #                      pre_trained=model_param['pre_trained'])
+    # elif model_name == 'VGGishTransformer':
+    #     func = VGGishTransformer
+    #     # return VGGishTransformer(frame_num=model_param['time_sec'],
+    #     #                          token_dim=model_param['token_dim'],
+    #     #                          n_head=model_param['n_head'],
+    #     #                          h_dim=model_param['h_dim'],
+    #     #                          layer_num=model_param['layer_num'],
+    #     #                          out_features=model_param['out_features'],
+    #     #                          pre_trained=model_param['pre_trained'])
+    # elif model_name == 'SimpleCNN':
+    #     func = SimpleCNN
+    #     # return SimpleCNN(frame_num=model_param['frame_num'],
+    #     #                  freq_num=model_param['freq_num'],
+    #     #                  kernel_size=model_param['kernel_size'])
+    # elif model_name == 'SimpleCNN2':
+    #
+    #     return SimpleCNN2(frame_num=model_param['frame_num'],
+    #                       freq_num=model_param['freq_num'],
+    #                       kernel_size=model_param['kernel_size'],
+    #                       dilation_size=model_param['dilation_size'],
+    #                       layer_num=model_param['layer_num'],
+    #                       inter_ch=model_param['inter_ch'])
+    # elif model_name == 'AreaSpecificCNN':
+    #     return AreaSpecificCNN(task_num=model_param['task_num'],
+    #                            freq_num=model_param['freq_num'],
+    #                            frame_num=model_param['frame_num'],
+    #                            kernel_size=model_param['kernel_size'],
+    #                            dilation_size=model_param['dilation_size'],
+    #                            layer_num=model_param['layer_num'],
+    #                            inter_ch=model_param['inter_ch'],
+    #                            pool_size=model_param['pool_size'])
+    # elif model_name == 'AreaSpecificCNN2':
+    #     return AreaSpecificCNN2(task_num=model_param['task_num'],
+    #                             freq_num=model_param['freq_num'],
+    #                             frame_num=model_param['frame_num'],
+    #                             common_kernel_size=model_param['common_kernel_size'],
+    #                             kernel_size=model_param['kernel_size'],
+    #                             common_dilation_size=model_param['common_dilation_size'],
+    #                             dilation_size=model_param['dilation_size'],
+    #                             common_layer_num=model_param['common_layer_num'],
+    #                             layer_num=model_param['layer_num'],
+    #                             common_inter_ch=model_param['common_inter_ch'],
+    #                             inter_ch=model_param['inter_ch'],
+    #                             common_pool_size=model_param['common_pool_size'],
+    #                             pool_size=model_param['pool_size'])
+    # elif model_name == 'ASTRegressor':
+    #     return ASTRegressor(feat_num=model_param['feat_num'],
+    #                         drop_out=model_param['drop_out'],
+    #                         model_name=model_param['model_name'],
+    #                         finetune=model_param['finetune'])
+    # elif model_name == 'Conv1dTransformer':
+    #     return Conv1dTransformer(freq_num=model_param['freq_num'],
+    #                              frame_num=model_param['frame_num'],
+    #                              kernel_size=model_param['kernel_size'],
+    #                              dilation_size=model_param['dilation_size'],
+    #                              pool_size=model_param['pool_size'],
+    #                              token_dim=model_param['token_dim'],
+    #                              n_head=model_param['n_head'],
+    #                              drop_out=model_param['drop_out'],
+    #                              pool_type=model_param['pool_type'],
+    #                              layer_num=model_param['layer_num'],
+    #                              pe_flag=model_param['pe_flag'],
+    #                              feat_num=model_param['feat_num'])
+    # elif model_name == 'LeastSquareModel':
+    #     return LeastSquareModel()
+    # else:
+    #     Exception(f'Model: {model_name} is not implemented.')
+    func_params = list(signature(func).parameters.keys())
+    setting_params = {k: model_param[k] for k in func_params if k in model_param.keys()}
+    return func(**setting_params)
 
 
 def trial_from_model_param_setting(trial: optuna.Trial, model_param_setting: dict):
@@ -593,7 +605,9 @@ def write_result(folder, target, output, label):
     output_df.columns = [f'predict{i}' for i in range(len(output_df.columns))]
     res_df = pd.concat([target_df, output_df], axis=1)
     res_df.to_csv(f'{folder}/result_{label}.csv', index=False)
-    calculate_accuracy(target, output, f'{folder}/acc_{label}.json')
+    for i in range(len(target_df.columns)):
+        calculate_accuracy(target_df[f'target{i}'].values, output_df[f'predict{i}'].values,
+                           f'{folder}/acc_{label}_{i}.json')
     return
 
 
@@ -644,6 +658,9 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
     weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.MSELoss()
+    if 'criterion' in model_param.keys():
+        assert model_param['criterion'] in LOSS_LIST
+        criterion = nn.L1Loss() if model_param['criterion'] == 'MAE' else nn.MSELoss()
 
     train_loss, test_loss = [], []
     for ep in range(epoch):
@@ -663,6 +680,7 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
         target_np = np.exp(target_np) - 1
         output_np = np.exp(output_np) - 1
     scatter_plot(target_np, output_np, f'{model_folder}/train_scatter.png')
+    write_result(model_folder, target_np, output_np, label='train')
 
     target_np, output_np = model_predict(model, test_dataloader)
     if log_scale:
@@ -670,7 +688,7 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
         target_np = np.exp(target_np) - 1
         output_np = np.exp(output_np) - 1
     scatter_plot(target_np, output_np, f'{model_folder}/scatter.png')
-    write_result(model_folder, target_np, output_np, label=target[0])
+    write_result(model_folder, target_np, output_np, label='test')
     return
 
 
@@ -892,6 +910,9 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
         weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = nn.MSELoss()
+        if 'criterion' in model_param.keys():
+            assert model_param['criterion'] in LOSS_LIST
+            criterion = nn.L1Loss() if model_param['criterion'] == 'MAE' else nn.MSELoss()
 
         train_loss, test_loss = [], []
         for ep in range(epoch):

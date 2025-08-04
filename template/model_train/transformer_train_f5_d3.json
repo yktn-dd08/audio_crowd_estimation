@@ -18,7 +18,7 @@
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_23"
         ],
         "valid_folder_list": [
-            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_15"
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_14"
         ],
         "model_folder": "./workspace/model/asphalt/Transformer_f5_d3",
         "model_name": "Conv1dTransformer",
@@ -43,7 +43,8 @@
             "out_features": 1,
 
             "lr": 0.000001,
-            "weight_decay": 0.0
+            "weight_decay": 0.0,
+            "criterion": "MAE"
         },
         "epoch": 50,
         "log_scale": true,
