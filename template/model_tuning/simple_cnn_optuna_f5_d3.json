@@ -59,7 +59,7 @@
             "weight_decay": 0.0,
             "criterion": "MAE"
         },
-        "epoch": 3,
+        "epoch": 50,
         "log_scale": true,
         "time_agg": true
     }
