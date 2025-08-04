@@ -559,42 +559,48 @@ def is_valid_model(model_name, model_param):
     -------
 
     """
-    if model_name == 'SimpleCNN2':
-        return SimpleCNN2.is_valid(
-            frame_num=model_param['frame_num'],
-            freq_num=model_param['freq_num'],
-            kernel_size=model_param['kernel_size'],
-            dilation_size=model_param['dilation_size'],
-            layer_num=model_param['layer_num'],
-            inter_ch=model_param['inter_ch']
-        )
-    elif model_name == 'AreaSpecificCNN':
-        return AreaSpecificCNN.is_valid(
-            task_num=model_param['task_num'],
-            freq_num=model_param['task_num'],
-            frame_num=model_param['frame_num'],
-            kernel_size=model_param['kernel_size'],
-            dilation_size=model_param['dilation_size'],
-            layer_num=model_param['layer_num'],
-            inter_ch=model_param['inter_ch'],
-            pool_size=model_param['pool_size']
-        )
-    elif model_name == 'AreaSpecificCNN2':
-        return AreaSpecificCNN2.is_valid(
-            task_num=model_param['task_num'],
-            freq_num=model_param['freq_num'],
-            frame_num=model_param['frame_num'],
-            common_kernel_size=model_param['common_kernel_size'],
-            kernel_size=model_param['kernel_size'],
-            common_dilation_size=model_param['common_dilation_size'],
-            dilation_size=model_param['dilation_size'],
-            common_layer_num=model_param['common_layer_num'],
-            layer_num=model_param['layer_num'],
-            common_inter_ch=model_param['common_inter_ch'],
-            inter_ch=model_param['inter_ch'],
-            common_pool_size=model_param['common_pool_size'],
-            pool_size=model_param['pool_size']
-        )
+    assert model_name in MODEL_LIST, f'You can choose model: {MODEL_LIST}.'
+    if model_name in ['SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2']:
+        func = eval(model_name)
+        func_params = list(signature(func.is_valid).parameters.keys())
+        setting_params = {k: model_param[k] for k in func_params if k in model_param.keys()}
+        return func.is_valid(**setting_params)
+    # if model_name == 'SimpleCNN2':
+    #     return SimpleCNN2.is_valid(
+    #         frame_num=model_param['frame_num'],
+    #         freq_num=model_param['freq_num'],
+    #         kernel_size=model_param['kernel_size'],
+    #         dilation_size=model_param['dilation_size'],
+    #         layer_num=model_param['layer_num'],
+    #         inter_ch=model_param['inter_ch']
+    #     )
+    # elif model_name == 'AreaSpecificCNN':
+    #     return AreaSpecificCNN.is_valid(
+    #         task_num=model_param['task_num'],
+    #         freq_num=model_param['task_num'],
+    #         frame_num=model_param['frame_num'],
+    #         kernel_size=model_param['kernel_size'],
+    #         dilation_size=model_param['dilation_size'],
+    #         layer_num=model_param['layer_num'],
+    #         inter_ch=model_param['inter_ch'],
+    #         pool_size=model_param['pool_size']
+    #     )
+    # elif model_name == 'AreaSpecificCNN2':
+    #     return AreaSpecificCNN2.is_valid(
+    #         task_num=model_param['task_num'],
+    #         freq_num=model_param['freq_num'],
+    #         frame_num=model_param['frame_num'],
+    #         common_kernel_size=model_param['common_kernel_size'],
+    #         kernel_size=model_param['kernel_size'],
+    #         common_dilation_size=model_param['common_dilation_size'],
+    #         dilation_size=model_param['dilation_size'],
+    #         common_layer_num=model_param['common_layer_num'],
+    #         layer_num=model_param['layer_num'],
+    #         common_inter_ch=model_param['common_inter_ch'],
+    #         inter_ch=model_param['inter_ch'],
+    #         common_pool_size=model_param['common_pool_size'],
+    #         pool_size=model_param['pool_size']
+    #     )
     return True
 
 
@@ -941,10 +947,11 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
             output_np = np.exp(output_np) - 1
         scatter_plot(target_np, output_np, f'{each_folder}/scatter.png')
         write_result(each_folder, target_np, output_np, f'trial_{trial._trial_id}')
-
-        tried_params = model_param_from_best_trial(model_param, model_param_optuna)
+        # print(f'model_param: {model_param}')
+        # print(f'model_param_optuna: {model_param_optuna}')
+        # tried_params = model_param_from_best_trial(model_param, model_param_optuna)
         with open(f'{each_folder}/model_params.json', 'w') as fp_:
-            json.dump(tried_params, fp_)
+            json.dump(model_param_optuna, fp_, indent=4)
 
         return test_loss[-1]
 
@@ -976,7 +983,7 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
     #         else:
     #             best_params[name] = best_params_optuna[name]
     with open(f'{model_folder}/best_params.json', 'w') as fp:
-        json.dump(best_params, fp)
+        json.dump(best_params, fp, indent=4)
     df = study.trials_dataframe()
     df.to_csv(f'{model_folder}/optuna_trials.csv', index=False)
     return
