@@ -3,6 +3,8 @@ import json
 import glob
 import argparse
 import os.path
+import shutil
+
 import optuna
 import librosa
 import numpy as np
@@ -222,7 +224,7 @@ def read_logmel(model_name, input_folder, target=None, tasks=None,
         return read_logmel_torch(input_folder, target, tasks, channel_num, time_sec, log_scale, time_agg)
 
 
-def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, time_agg, target,
+def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, time_agg, log_scale, target,
                  valid_flag=True, tasks=None):
     x, y, task = None, None, None
     for i, input_folder in enumerate(input_folder_list):
@@ -236,6 +238,7 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                 channel_num=1,
                 time_sec=model_param['time_sec'],
                 time_agg=time_agg,
+                log_scale=log_scale,
                 model_param=model_param
             )
             x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
@@ -249,7 +252,8 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                 channel_num=1,
                 tasks=tasks,
                 time_sec=model_param['time_sec'],
-                time_agg=time_agg
+                time_agg=time_agg,
+                log_scale=log_scale
             )
             x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
             y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
@@ -622,12 +626,14 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
                          log_scale=True, time_agg=False, batch_size=64):
     device = get_device(dev)
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
+    logger.info(f' model_folder: {model_folder}')
     (x, y), (valid_x, valid_y) = load_dataset(
         input_folder_list=input_folder_list,
         valid_folder_list=valid_folder_list,
         model_name=model_name,
         model_param=model_param,
         time_agg=time_agg,
+        log_scale=log_scale,
         target=target
     )
     # x, y = None, None
@@ -710,6 +716,7 @@ def audio_crowd_training_multitask(input_folder_list, valid_folder_list,
         model_param=model_param,
         time_agg=time_agg,
         target=target,
+        log_scale=log_scale,
         tasks=tasks
     )
     # x, y, task = None, None, None
@@ -823,6 +830,7 @@ def audio_crowd_prediction(input_folder_list, model_folder, model_name, output_f
         model_name=model_name,
         model_param=model_param,
         time_agg=time_agg,
+        log_scale=log_scale,
         target=target,
         valid_flag=False
     )
@@ -866,12 +874,14 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
                        dev=None, log_scale=True, time_agg=False, batch_size=64):
     device = get_device(dev)
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
+    logger.info(f' model_folder: {model_folder}')
     (x, y), (valid_x, valid_y) = load_dataset(
         input_folder_list=input_folder_list,
         valid_folder_list=valid_folder_list,
         model_name=model_name,
         model_param=model_param,
         time_agg=time_agg,
+        log_scale=log_scale,
         target=target
     )
     # x, y = None, None
@@ -1000,6 +1010,7 @@ def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
         model_name=model_name,
         model_param=model_param,
         time_agg=time_agg,
+        log_scale=log_scale,
         target=target,
         tasks=tasks
     )
@@ -1189,6 +1200,11 @@ def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
     df.to_csv(f'{model_folder}/optuna_trials.csv', index=False)
     return
 
+def copy_json(json_path, model_folder):
+    json_name = os.path.basename(json_path)
+    shutil.copyfile(args.input_config_json, f'{model_folder}/{json_name}')
+    logger.info(f'Copied input json for model param: {model_folder}/{json_name}')
+    return
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -1217,6 +1233,7 @@ if __name__ == '__main__':
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
+        copy_json(args.input_config_json, cf['model_folder'])
 
     elif args.option == 'predict':
         cf = cf['predict']
@@ -1233,6 +1250,7 @@ if __name__ == '__main__':
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
+        copy_json(args.input_config_json, cf['model_folder'])
 
     elif args.option == 'tuning':
         cf = cf['optuna']
@@ -1252,6 +1270,7 @@ if __name__ == '__main__':
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
+        copy_json(args.input_config_json, cf['model_folder'])
 
     elif args.option == 'multi_train':
         cf = cf['train']
@@ -1271,6 +1290,7 @@ if __name__ == '__main__':
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
+        copy_json(args.input_config_json, cf['model_folder'])
 
     elif args.option == 'multi_predict':
         pass
@@ -1295,4 +1315,4 @@ if __name__ == '__main__':
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        pass
+        copy_json(args.input_config_json, cf['model_folder'])

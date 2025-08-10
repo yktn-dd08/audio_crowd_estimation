@@ -20,7 +20,7 @@
         "valid_folder_list": [
             "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_14"
         ],
-        "model_folder": "./workspace/model/asphalt/AreaSpecificCNN_f5_d10",
+        "model_folder": "./workspace/model/optuna/asphalt/AreaSpecificCNN_f5_d10",
         "model_name": "AreaSpecificCNN",
         "target": ["distance_10"],
         "tasks": ["range_0-1", "range_1-2", "range_2-3", "range_3-4", "range_4-5", "range_5-6", "range_6-7", "range_7-8", "range_8-9", "range_9-10"],

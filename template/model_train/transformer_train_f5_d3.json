@@ -20,7 +20,7 @@
         "valid_folder_list": [
             "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_14"
         ],
-        "model_folder": "./workspace/model/asphalt/Transformer_f5_d3",
+        "model_folder": "./workspace/model/train/asphalt/Transformer_f5_d3_e100",
         "model_name": "Conv1dTransformer",
         "target": ["distance_3"],
         "batch_size": 64,
@@ -39,14 +39,14 @@
             "pe_flag": true,
             "pool_type": "attention",
             "dff_times": 4,
-            "feat_num": 128,
+            "feat_num": 64,
             "out_features": 1,
 
             "lr": 0.000001,
             "weight_decay": 0.0,
             "criterion": "MAE"
         },
-        "epoch": 50,
+        "epoch": 100,
         "log_scale": true,
         "time_agg": true
     }

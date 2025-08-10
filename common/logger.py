@@ -3,7 +3,7 @@ from rich.logging import RichHandler
 
 
 def get_logger(name, level=logging.DEBUG):
-    for mod in ['numba', 'matplotlib']:
+    for mod in ['numba', 'matplotlib', 'PIL']:
         logging.getLogger(mod).setLevel(logging.CRITICAL)
 
     logging.basicConfig(

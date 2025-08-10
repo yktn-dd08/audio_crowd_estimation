@@ -18,10 +18,10 @@
             "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_23"
         ],
         "valid_folder_list": [
-            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_15"
+            "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0807_14"
         ],
-        "model_folder": "./workspace/model/train/asphalt/Conv1dTransformer_f5_d3",
-        "model_name": "Conv1dTransformer",
+        "model_folder": "./workspace/model/train/asphalt/LS_f5_d3",
+        "model_name": "LeastSquareModel",
         "target": ["distance_3"],
         "batch_size": 64,
         "model_param": {
@@ -29,23 +29,13 @@
             "frame_num": 501,
             "freq_num": 64,
 
-            "kernel_size": 19,
-            "dilation_size": 7,
-            "pool_size": 1,
-
-            "token_dim": 128,
-            "n_head": 8,
-            "drop_out": 0.05905775792450846,
-            "layer_num": 2,
-            "pe_flag": true,
-            "feat_num": 128,
             "out_features": 1,
 
             "lr": 0.000001,
             "weight_decay": 0.0,
             "criterion": "MAE"
         },
-        "epoch": 50,
+        "epoch": 100,
         "log_scale": true,
         "time_agg": true
     }

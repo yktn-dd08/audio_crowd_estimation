@@ -11,7 +11,7 @@
         "valid_folder_list": [
             "./workspace/sim/marunouchi/asphalt/test/roi1_crowd0806_15"
         ],
-        "model_folder": "./workspace/model/asphalt/AST_f5_d10",
+        "model_folder": "./workspace/model/train/asphalt/AST_f5_d10",
         "model_name": "ASTRegressor",
         "target": ["distance_10"],
         "batch_size": 64,
