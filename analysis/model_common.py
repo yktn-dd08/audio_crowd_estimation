@@ -10,6 +10,19 @@ from tqdm import tqdm
 
 
 def get_device(device=None):
+    """
+    deviceの取得
+    Parameters
+    ----------
+    device: str or None
+        'cpu', 'cuda', 'mps' or None
+        Noneの場合、自動で判定
+
+    Returns
+    -------
+    dev: torch.device
+        使用するdevice
+    """
     if device is not None:
         return torch.device(device)
     dev = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')

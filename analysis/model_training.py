@@ -34,6 +34,19 @@ logger = get_logger('analysis.model_training')
 
 
 def read_wav(input_folder, channel_num=1):
+    """
+    解析用音声データの読み込み
+    Parameters
+    ----------
+    input_folder: str
+        解析用データのフォルダパス
+    channel_num: int
+        読み込むチャンネル数
+    Returns
+    -------
+    np.ndarray: [channel_num x signal_length]
+        読み込んだ音声データ
+    """
     with open(f'{input_folder}/signal_info.json') as f:
         signal_info = json.load(f)
     assert len(signal_info['microphone']) >= channel_num, 'channel_num must be less than microphone number'
@@ -85,9 +98,13 @@ def read_logmel_torch(input_folder, target=None, tasks=None,
     assert channel_num == 1, 'Can input only single channel signal.'
     signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
     crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
+    for tg in target:
+        if tg not in crowd.keys():
+            crowd[tg] = calc_other_task(crowd=crowd, task_name=tg)
     if tasks is not None:
         for task in tasks:
-            crowd[task] = calc_other_task(crowd=crowd, task_name=task)
+            if task not in crowd.keys():
+                crowd[task] = calc_other_task(crowd=crowd, task_name=task)
     time_length = min(int(len(signal) / FS), len(crowd[target[0]]))
     x = [trans_logmel(signal[FS * (t+1-time_sec):FS * (t + 1)], FS) for t in range(time_sec - 1,time_length)]
     x = torch.stack(x)
@@ -115,15 +132,19 @@ def read_logmel_torch(input_folder, target=None, tasks=None,
 
 def read_logmel_torch_ast(input_folder, model_param, target=None, tasks=None,
                           channel_num=1, time_sec=1, log_scale=True, time_agg=False):
-    # TODO 修正、関係する関数も全て引数から見直し
+    # TODO 修正必要、関係する関数も全て引数から見直し
     if target is None:
         target = ['count']
     assert channel_num == 1, 'Can input only single channel signal.'
     signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
     crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
+    for tg in target:
+        if tg not in crowd.keys():
+            crowd[tg] = calc_other_task(crowd=crowd, task_name=tg)
     if tasks is not None:
         for task in tasks:
-            crowd[task] = calc_other_task(crowd=crowd, task_name=task)
+            if task not in crowd.keys():
+                crowd[task] = calc_other_task(crowd=crowd, task_name=task)
     time_length = min(int(len(signal) / FS), len(crowd[target[0]]))
     sig_list = np.array([signal[FS * (t+1-time_sec):FS * (t + 1)] for t in range(time_sec - 1,time_length)])
     feat_ext = ASTFeatureExtractor.from_pretrained(model_param['model_name'])
@@ -151,29 +172,29 @@ def read_logmel_torch_ast(input_folder, model_param, target=None, tasks=None,
     else:
         return x, y
 
-def read_logmel_torch_multi_task(input_folder, target, tasks,
-                                 channel_num=1, time_sec=1, log_scale=True, time_agg=False):
-    assert channel_num == 1, 'Can input only single channel signal.'
-    signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
-    crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
-    for task in tasks:
-        crowd[task] = calc_other_task(crowd=crowd, task_name=task)
-    time_length = min(int(len(signal) / FS), len(crowd[tasks[0]]))
-    x = [trans_logmel(signal[FS * (t+1-time_sec):FS * (t + 1)], FS) for t in range(time_sec - 1,time_length)]
-    x = torch.stack(x)
-    y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in tasks]).T
-    task_np = np.array([crowd[ts][time_sec-1:time_length] for ts in tasks]).T
-    if time_agg:
-        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) / time_sec for t in range(time_sec - 1, time_length)]
-                         for tg in target]).T
-        task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) / time_sec
-                             for t in range(time_sec - 1, time_length)]
-                            for ts in tasks]).T
-    if log_scale:
-        y_np = np.log(y_np + 1.0)
-        task_np = np.log(task_np + 1.0)
-    y, task = torch.Tensor(y_np), torch.Tensor(task_np)
-    return x, y, task
+# def read_logmel_torch_multi_task(input_folder, target, tasks,
+#                                  channel_num=1, time_sec=1, log_scale=True, time_agg=False):
+#     assert channel_num == 1, 'Can input only single channel signal.'
+#     signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
+#     crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
+#     for task in tasks:
+#         crowd[task] = calc_other_task(crowd=crowd, task_name=task)
+#     time_length = min(int(len(signal) / FS), len(crowd[tasks[0]]))
+#     x = [trans_logmel(signal[FS * (t+1-time_sec):FS * (t + 1)], FS) for t in range(time_sec - 1,time_length)]
+#     x = torch.stack(x)
+#     y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in tasks]).T
+#     task_np = np.array([crowd[ts][time_sec-1:time_length] for ts in tasks]).T
+#     if time_agg:
+#         y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) / time_sec for t in range(time_sec - 1, time_length)]
+#                          for tg in target]).T
+#         task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) / time_sec
+#                              for t in range(time_sec - 1, time_length)]
+#                             for ts in tasks]).T
+#     if log_scale:
+#         y_np = np.log(y_np + 1.0)
+#         task_np = np.log(task_np + 1.0)
+#     y, task = torch.Tensor(y_np), torch.Tensor(task_np)
+#     return x, y, task
 
 
 def read_logmel_torch_vgg(input_folder, target=None, tasks=None,
@@ -183,9 +204,13 @@ def read_logmel_torch_vgg(input_folder, target=None, tasks=None,
     assert channel_num == 1, 'Can input only single channel signal.'
     signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
     crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
+    for tg in target:
+        if tg not in crowd.keys():
+            crowd[tg] = calc_other_task(crowd=crowd, task_name=tg)
     if tasks is not None:
         for task in tasks:
-            crowd[task] = calc_other_task(crowd=crowd, task_name=task)
+            if task not in crowd.keys():
+                crowd[task] = calc_other_task(crowd=crowd, task_name=task)
     logmel_func = VGGISH.get_input_processor()
     time_length = min(int(len(signal) / FS), len(crowd[target[0]]))
     # time_sec > 1の時の対応
@@ -226,6 +251,34 @@ def read_logmel(model_name, input_folder, target=None, tasks=None,
 
 def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, time_agg, log_scale, target,
                  valid_flag=True, tasks=None):
+    """
+    解析用データセットの読み込み
+    Parameters
+    ----------
+    input_folder_list: list
+        学習用データのフォルダリスト
+    valid_folder_list: list | None
+        検証用データのフォルダリスト
+    model_name: str
+        モデル名
+    model_param: dict
+        モデルのパラメータ
+    time_agg: bool
+        目的変数を時間平均値にするかどうか
+    log_scale: bool
+        目的変数を対数変換するかどうか
+    target: list
+        目的変数のカラム名リスト
+    valid_flag: bool
+        検証用データを返すかどうか
+    tasks: list
+        マルチタスク学習用のタスク名リスト
+
+    Returns
+    -------
+    (x, y), (valid_x, valid_y) or (x, y, task), (valid_x, valid_y, valid_task)
+    学習用データと検証用データ
+    """
     x, y, task = None, None, None
     for i, input_folder in enumerate(input_folder_list):
         logger.info(f'Reading Training Folders: {input_folder}')
@@ -316,86 +369,44 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
 
 
 def audio_crowd_model(model_name, model_param):
-    assert model_name in MODEL_LIST, f'You can choose model: {MODEL_LIST}.'
+    """
+    model_nameからモデルを取得し、model_paramを引数としてモデルを生成する
+    Parameters
+    ----------
+    model_name: str
+        モデル名
+    model_param: dict
+        モデルのパラメータ
+
+    Returns
+    -------
+    model: nn.Module
+        生成したモデル
+    """
+    assert model_name in MODEL_LIST, f'You can choose model as following: {MODEL_LIST}.'
+    # model_nameからモデルの関数を取得
     func = eval(model_name)
-    # if model_name == 'VGGishLinear':
-    #     func = VGGishLinear2
-    #     # return VGGishLinear2(frame_num=model_param['time_sec'],
-    #     #                      out_features=model_param['out_features'],
-    #     #                      pre_trained=model_param['pre_trained'])
-    # elif model_name == 'VGGishTransformer':
-    #     func = VGGishTransformer
-    #     # return VGGishTransformer(frame_num=model_param['time_sec'],
-    #     #                          token_dim=model_param['token_dim'],
-    #     #                          n_head=model_param['n_head'],
-    #     #                          h_dim=model_param['h_dim'],
-    #     #                          layer_num=model_param['layer_num'],
-    #     #                          out_features=model_param['out_features'],
-    #     #                          pre_trained=model_param['pre_trained'])
-    # elif model_name == 'SimpleCNN':
-    #     func = SimpleCNN
-    #     # return SimpleCNN(frame_num=model_param['frame_num'],
-    #     #                  freq_num=model_param['freq_num'],
-    #     #                  kernel_size=model_param['kernel_size'])
-    # elif model_name == 'SimpleCNN2':
-    #
-    #     return SimpleCNN2(frame_num=model_param['frame_num'],
-    #                       freq_num=model_param['freq_num'],
-    #                       kernel_size=model_param['kernel_size'],
-    #                       dilation_size=model_param['dilation_size'],
-    #                       layer_num=model_param['layer_num'],
-    #                       inter_ch=model_param['inter_ch'])
-    # elif model_name == 'AreaSpecificCNN':
-    #     return AreaSpecificCNN(task_num=model_param['task_num'],
-    #                            freq_num=model_param['freq_num'],
-    #                            frame_num=model_param['frame_num'],
-    #                            kernel_size=model_param['kernel_size'],
-    #                            dilation_size=model_param['dilation_size'],
-    #                            layer_num=model_param['layer_num'],
-    #                            inter_ch=model_param['inter_ch'],
-    #                            pool_size=model_param['pool_size'])
-    # elif model_name == 'AreaSpecificCNN2':
-    #     return AreaSpecificCNN2(task_num=model_param['task_num'],
-    #                             freq_num=model_param['freq_num'],
-    #                             frame_num=model_param['frame_num'],
-    #                             common_kernel_size=model_param['common_kernel_size'],
-    #                             kernel_size=model_param['kernel_size'],
-    #                             common_dilation_size=model_param['common_dilation_size'],
-    #                             dilation_size=model_param['dilation_size'],
-    #                             common_layer_num=model_param['common_layer_num'],
-    #                             layer_num=model_param['layer_num'],
-    #                             common_inter_ch=model_param['common_inter_ch'],
-    #                             inter_ch=model_param['inter_ch'],
-    #                             common_pool_size=model_param['common_pool_size'],
-    #                             pool_size=model_param['pool_size'])
-    # elif model_name == 'ASTRegressor':
-    #     return ASTRegressor(feat_num=model_param['feat_num'],
-    #                         drop_out=model_param['drop_out'],
-    #                         model_name=model_param['model_name'],
-    #                         finetune=model_param['finetune'])
-    # elif model_name == 'Conv1dTransformer':
-    #     return Conv1dTransformer(freq_num=model_param['freq_num'],
-    #                              frame_num=model_param['frame_num'],
-    #                              kernel_size=model_param['kernel_size'],
-    #                              dilation_size=model_param['dilation_size'],
-    #                              pool_size=model_param['pool_size'],
-    #                              token_dim=model_param['token_dim'],
-    #                              n_head=model_param['n_head'],
-    #                              drop_out=model_param['drop_out'],
-    #                              pool_type=model_param['pool_type'],
-    #                              layer_num=model_param['layer_num'],
-    #                              pe_flag=model_param['pe_flag'],
-    #                              feat_num=model_param['feat_num'])
-    # elif model_name == 'LeastSquareModel':
-    #     return LeastSquareModel()
-    # else:
-    #     Exception(f'Model: {model_name} is not implemented.')
+
+    # 当該モデルの引数を取得してmodel_paramから該当する引数のみ渡す
     func_params = list(signature(func).parameters.keys())
     setting_params = {k: model_param[k] for k in func_params if k in model_param.keys()}
     return func(**setting_params)
 
 
 def trial_from_model_param_setting(trial: optuna.Trial, model_param_setting: dict):
+    """
+    optunaのtrialオブジェクトからモデルパラメタを取得する
+    Parameters
+    ----------
+    trial: optunaのtrialオブジェクト
+    model_param_setting: dict
+        optunaに設定する際に入力したJSONデータ
+
+    Returns
+    -------
+    model_param_optuna: dict
+        optuna探索により得られたモデルパラメタを格納したJSONデータ
+    """
     model_param_optuna = {}
     for name, val in model_param_setting.items():
         if not isinstance(val, dict):
@@ -480,12 +491,15 @@ def model_param_from_best_trial(model_param_setting: dict, best_params_optuna: d
     optuna探索結果から最良となったパラメタについて、dict化(listなど)
     Parameters
     ----------
-    model_param_setting optunaに設定する際に入力したJSONデータ
-    best_params_optuna optuna探索により得られた最良の結果
+    model_param_setting: dict
+        optunaに設定する際に入力したJSONデータ
+    best_params_optuna: dict
+        optuna探索により得られた最良の結果
 
-    Returns 探索結果のモデルパラメタを格納したJSONデータ
+    Returns
     -------
-
+    best_params: dict
+        探索結果のモデルパラメタを格納したJSONデータ
     """
     best_params = {}
     for name, val in model_param_setting.items():
@@ -556,12 +570,15 @@ def is_valid_model(model_name, model_param):
 
     Parameters
     ----------
-    model_name モデル名：現状SimpleCNN2, MultiTaskCNNのみ検証の必要がある
-    model_param モデルパラメタ
+    model_name: str
+        モデル名：現状SimpleCNN2, MultiTaskCNNのみ検証の必要がある
+    model_param: dict
+        モデルパラメタ
 
-    Returns モデルがvalidかどうか
+    Returns
     -------
-
+    valid: bool
+        モデルパラメタが妥当であればTrue、そうでなければFalse
     """
     assert model_name in MODEL_LIST, f'You can choose model: {MODEL_LIST}.'
     if model_name in ['SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2']:
@@ -608,16 +625,117 @@ def is_valid_model(model_name, model_param):
     return True
 
 
-def write_result(folder, target, output, label):
-    target_df = pd.DataFrame(target)
-    target_df.columns = [f'target{i}' for i in range(len(target_df.columns))]
-    output_df = pd.DataFrame(output)
-    output_df.columns = [f'predict{i}' for i in range(len(output_df.columns))]
+def load_model_setting(model_name, model_param, target, finetune=None):
+    """
+    モデル、オプティマイザ、損失関数の生成
+    Parameters
+    ----------
+    model_name: str
+        モデル名
+    model_param: dict
+        モデルのパラメータ
+    target: list
+        目的変数のカラム名リスト
+    finetune: any
+        ファインチューニング用のパラメータ
+        Noneの時は全てのパラメータを学習する
+
+    Returns
+    -------
+    model: nn.Module
+        生成したモデル
+    optimizer: torch.optim.Optimizer
+        生成したオプティマイザ
+    criterion: nn.Module
+        生成した損失関数
+    """
+    if 'out_features' not in model_param:
+        model_param['out_features'] = len(target)
+    model = audio_crowd_model(model_name, model_param)
+    if finetune is not None:
+        model.freeze(finetune)
+
+    lr = 1e-5 if 'lr' not in model_param.keys() else model_param['lr']
+    weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
+    optimizer = torch.optim.Adam(
+        model.parameters() if finetune is None else filter(lambda p: p.requires_grad, model.parameters()),
+        lr=lr,
+        weight_decay=weight_decay
+    )
+    criterion = nn.MSELoss()
+    if 'criterion' in model_param.keys():
+        assert model_param['criterion'] in LOSS_LIST
+        criterion = nn.L1Loss() if model_param['criterion'] == 'MAE' else nn.MSELoss()
+    return model, optimizer, criterion
+
+
+def write_result(folder, target_np, output_np, target, label, log_scale):
+    """
+    解析結果の保存
+    Parameters
+    ----------
+    folder: str
+        保存先フォルダ
+    target_np: np.ndarray
+        目的変数のnumpy配列
+    output_np: np.ndarray
+        予測値のnumpy配列
+    target: list
+        目的変数のカラム名リスト
+    label: str
+        保存ファイル名のラベル
+    log_scale: bool
+        目的変数が対数変換されているかどうか
+
+    Returns
+    -------
+
+    """
+    if log_scale:
+        target_np = np.exp(target_np) - 1
+        output_np = np.exp(output_np) - 1
+    target_df = pd.DataFrame(target_np)
+    target_df.columns = [f'target_{t}' for t in target]
+    output_df = pd.DataFrame(output_np)
+    output_df.columns = [f'predict_{t}' for t in target]
     res_df = pd.concat([target_df, output_df], axis=1)
-    res_df.to_csv(f'{folder}/result_{label}.csv', index=False)
-    for i in range(len(target_df.columns)):
-        calculate_accuracy(target_df[f'target{i}'].values, output_df[f'predict{i}'].values,
-                           f'{folder}/acc_{label}_{i}.json')
+    res_df.to_csv(f'{folder}/{label}_result.csv', index=False)
+    for t in target:
+        calculate_accuracy(target_df[f'target_{t}'].values, output_df[f'predict_{t}'].values,
+                           f'{folder}/{label}_acc_{t}.json')
+    return
+
+
+def plot_result(folder, target_np, output_np, target, label, log_scale):
+    """
+    解析結果のプロット保存
+    Parameters
+    ----------
+    folder: str
+        保存先フォルダ
+    target_np: np.ndarray
+        目的変数のnumpy配列
+    output_np: np.ndarray
+        予測値のnumpy配列
+    target: list
+        目的変数のカラム名リスト
+    label: str
+        保存ファイル名のラベル
+    log_scale: bool
+        目的変数が対数変換されているかどうか
+
+    Returns
+    -------
+
+    """
+    assert len(target) == target_np.shape[1], f'Invalid size. target: {target}, target_np.shape: {target_np.shape}.'
+    if log_scale:
+        for i, t in enumerate(target):
+            scatter_plot(target_np[:, i], output_np[:, i], f'{folder}/{label}_scatter_log_{t}.png')
+        target_np = np.exp(target_np) - 1
+        output_np = np.exp(output_np) - 1
+    for i, t in enumerate(target):
+        scatter_plot(target_np[:, i], output_np[:, i], f'{folder}/{label}_scatter_{t}.png')
     return
 
 
@@ -636,43 +754,25 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
         log_scale=log_scale,
         target=target
     )
-    # x, y = None, None
-    # for i, input_folder in enumerate(input_folder_list):
-    #     logger.info(f'Reading Training Folders: {input_folder}')
-    #     tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=input_folder, target=target, channel_num=1,
-    #                                time_sec=model_param['time_sec'], time_agg=time_agg)
-    #     x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-    #     y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
-    #
-    # valid_x, valid_y = None, None
-    # if valid_folder_list is None:
-    #     tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
-    #     valid_x, valid_y = x[ts_idx], y[ts_idx]
-    #     x, y = x[tr_idx], y[tr_idx]
-    # else:
-    #     for i, valid_folder in enumerate(valid_folder_list):
-    #         logger.info(f'Reading Valid Folders: {valid_folder}')
-    #         tmp_x, tmp_y = read_logmel(model_name=model_name, input_folder=valid_folder, target=target, channel_num=1,
-    #                                    time_sec=model_param['time_sec'], time_agg=time_agg)
-    #         valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-    #         valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
 
     train_dataset = torch.utils.data.TensorDataset(x.to(device), y.to(device))
     test_dataset = torch.utils.data.TensorDataset(valid_x.to(device), valid_y.to(device))
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
 
-    if 'out_features' not in model_param:
-        model_param['out_features'] = len(target)
-    model = audio_crowd_model(model_name, model_param).to(device)
-
-    lr = 1e-5 if 'lr' not in model_param.keys() else model_param['lr']
-    weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    criterion = nn.MSELoss()
-    if 'criterion' in model_param.keys():
-        assert model_param['criterion'] in LOSS_LIST
-        criterion = nn.L1Loss() if model_param['criterion'] == 'MAE' else nn.MSELoss()
+    model, optimizer, criterion = load_model_setting(model_name, model_param, target)
+    model = model.to(device)
+    # if 'out_features' not in model_param:
+    #     model_param['out_features'] = len(target)
+    # model = audio_crowd_model(model_name, model_param).to(device)
+    #
+    # lr = 1e-5 if 'lr' not in model_param.keys() else model_param['lr']
+    # weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
+    # optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    # criterion = nn.MSELoss()
+    # if 'criterion' in model_param.keys():
+    #     assert model_param['criterion'] in LOSS_LIST
+    #     criterion = nn.L1Loss() if model_param['criterion'] == 'MAE' else nn.MSELoss()
 
     train_loss, test_loss = [], []
     for ep in range(epoch):
@@ -687,20 +787,12 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
     torch.save(model.state_dict(), f'{model_folder}/{model_name}_model.pt')
 
     target_np, output_np = model_predict(model, train_dataloader)
-    if log_scale:
-        scatter_plot(target_np, output_np, f'{model_folder}/train_scatter_log.png')
-        target_np = np.exp(target_np) - 1
-        output_np = np.exp(output_np) - 1
-    scatter_plot(target_np, output_np, f'{model_folder}/train_scatter.png')
-    write_result(model_folder, target_np, output_np, label='train')
+    plot_result(model_folder, target_np, output_np, target, label='train', log_scale=log_scale)
+    write_result(model_folder, target_np, output_np, target, label='train', log_scale=log_scale)
 
     target_np, output_np = model_predict(model, test_dataloader)
-    if log_scale:
-        scatter_plot(target_np, output_np, f'{model_folder}/scatter_log.png')
-        target_np = np.exp(target_np) - 1
-        output_np = np.exp(output_np) - 1
-    scatter_plot(target_np, output_np, f'{model_folder}/scatter.png')
-    write_result(model_folder, target_np, output_np, label='test')
+    plot_result(model_folder, target_np, output_np, target, label='test', log_scale=log_scale)
+    write_result(model_folder, target_np, output_np, target, label='test', log_scale=log_scale)
     return
 
 
@@ -932,8 +1024,8 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
 
         train_loss, test_loss = [], []
         for ep in range(epoch):
-            tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep, verbose=False)
-            ts_loss_tmp = model_test(model, test_dataloader, criterion, ep, verbose=False)
+            tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep, verbose=True)
+            ts_loss_tmp = model_test(model, test_dataloader, criterion, ep, verbose=True)
             train_loss.append(tr_loss_tmp)
             test_loss.append(ts_loss_tmp)
 
@@ -943,20 +1035,24 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
         view_loss(train_loss, test_loss, f'{each_folder}/loss.png')
 
         target_np, output_np = model_predict(model, train_dataloader, verbose=False)
-        if log_scale:
-            scatter_plot(target_np, output_np, f'{each_folder}/train_scatter_log.png')
-            target_np = np.exp(target_np) - 1
-            output_np = np.exp(output_np) - 1
-        scatter_plot(target_np, output_np, f'{each_folder}/train_scatter.png')
-        write_result(each_folder, target_np, output_np, f'train_trial_{trial._trial_id}')
+        plot_result(each_folder, target_np, output_np, target, label='train', log_scale=log_scale)
+        write_result(each_folder, target_np, output_np, target, label='train', log_scale=log_scale)
+        # if log_scale:
+        #     scatter_plot(target_np, output_np, f'{each_folder}/train_scatter_log.png')
+        #     target_np = np.exp(target_np) - 1
+        #     output_np = np.exp(output_np) - 1
+        # scatter_plot(target_np, output_np, f'{each_folder}/train_scatter.png')
+        # write_result(each_folder, target_np, output_np, f'train_trial_{trial._trial_id}')
 
         target_np, output_np = model_predict(model, test_dataloader, verbose=False)
-        if log_scale:
-            scatter_plot(target_np, output_np, f'{each_folder}/scatter_log.png')
-            target_np = np.exp(target_np) - 1
-            output_np = np.exp(output_np) - 1
-        scatter_plot(target_np, output_np, f'{each_folder}/scatter.png')
-        write_result(each_folder, target_np, output_np, f'trial_{trial._trial_id}')
+        plot_result(each_folder, target_np, output_np, target, label='test', log_scale=log_scale)
+        write_result(each_folder, target_np, output_np, target, label='test', log_scale=log_scale)
+        # if log_scale:
+        #     scatter_plot(target_np, output_np, f'{each_folder}/scatter_log.png')
+        #     target_np = np.exp(target_np) - 1
+        #     output_np = np.exp(output_np) - 1
+        # scatter_plot(target_np, output_np, f'{each_folder}/scatter.png')
+        # write_result(each_folder, target_np, output_np, f'trial_{trial._trial_id}')
         # print(f'model_param: {model_param}')
         # print(f'model_param_optuna: {model_param_optuna}')
         # tried_params = model_param_from_best_trial(model_param, model_param_optuna)
@@ -996,6 +1092,52 @@ def audio_crowd_tuning(input_folder_list, valid_folder_list,
         json.dump(best_params, fp, indent=4)
     df = study.trials_dataframe()
     df.to_csv(f'{model_folder}/optuna_trials.csv', index=False)
+    return
+
+
+def audio_crowd_finetune(input_folder_list, valid_folder_list, pretrain_model_folder,
+                         model_folder, model_name, model_param, target, epoch, dev=None,
+                         log_scale=True, time_agg=False, batch_size=64):
+    device = get_device(dev)
+    logger.info(f'Start {model_name} Finetuning: {device} - Columns: {target}')
+    (x, y), (valid_x, valid_y) = load_dataset(
+        input_folder_list=input_folder_list,
+        valid_folder_list=valid_folder_list,
+        model_name=model_name,
+        model_param=model_param,
+        time_agg=time_agg,
+        log_scale=log_scale,
+        target=target
+    )
+    train_dataset = torch.utils.data.TensorDataset(x.to(device), y.to(device))
+    test_dataset = torch.utils.data.TensorDataset(valid_x.to(device), valid_y.to(device))
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
+
+    model, optimizer, criterion = load_model_setting(model_name, model_param, target, finetune=model_param['finetune'])
+    model = model.to(device)
+    # Load pre-trained model
+    model.load_state_dict(torch.load(f'{pretrain_model_folder}/{model_name}_model.pt'))
+
+    train_loss, test_loss = [], []
+    for ep in range(epoch):
+        tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep)
+        ts_loss_tmp = model_test(model, test_dataloader, criterion, ep)
+        train_loss.append(tr_loss_tmp)
+        test_loss.append(ts_loss_tmp)
+
+    if not os.path.exists(model_folder):
+        os.makedirs(model_folder, exist_ok=True)
+    view_loss(train_loss, test_loss, f'{model_folder}/loss.png')
+    torch.save(model.state_dict(), f'{model_folder}/{model_name}_model.pt')
+
+    target_np, output_np = model_predict(model, train_dataloader)
+    plot_result(model_folder, target_np, output_np, target, label='train', log_scale=log_scale)
+    write_result(model_folder, target_np, output_np, target, label='train', log_scale=log_scale)
+
+    target_np, output_np = model_predict(model, test_dataloader)
+    plot_result(model_folder, target_np, output_np, target, label='test', log_scale=log_scale)
+    write_result(model_folder, target_np, output_np, target, label='test', log_scale=log_scale)
     return
 
 
@@ -1099,10 +1241,18 @@ def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
         #         return float('inf')
 
         model = audio_crowd_model(model_name, model_param_optuna).to(device)
-
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+        lr = 1e-5 if 'lr' not in model_param.keys() else model_param['lr']
+        weight_decay = 0.0 if 'weight_decay' not in model_param.keys() else model_param['weight_decay']
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         criterion = nn.MSELoss()
         task_criterion = nn.MSELoss()
+        if 'criterion' in model_param.keys():
+            assert model_param['criterion'] in LOSS_LIST
+            criterion = nn.L1Loss() if model_param['criterion'] == 'MAE' else nn.MSELoss()
+            task_criterion = nn.L1Loss() if model_param['criterion'] == 'MAE' else nn.MSELoss()
+        # optimizer = torch.optim.Adam(model.parameters(), lr=1e-04, weight_decay=2.7e-09)
+        # criterion = nn.MSELoss()
+        # task_criterion = nn.MSELoss()
 
         train_loss, test_loss = [], []
         main_train_loss, main_test_loss = [], []
@@ -1163,9 +1313,9 @@ def audio_crowd_tuning_multitask(input_folder_list, valid_folder_list,
             scatter_plot(target_task_np[:, i], output_task_np[:, i],
                          f'{each_folder}/scatter_{tsk}.png')
 
-        tried_params = model_param_from_best_trial(model_param, model_param_optuna)
+        # tried_params = model_param_from_best_trial(model_param, model_param_optuna)
         with open(f'{each_folder}/model_params.json', 'w') as fp_:
-            json.dump(tried_params, fp_)
+            json.dump(model_param_optuna, fp_)
         return test_loss[-1]
 
     optuna_sampler = optuna.samplers.TPESampler(seed=42) if sampler == 'tpe' else optuna.samplers.RandomSampler(seed=42)
@@ -1209,7 +1359,8 @@ def copy_json(json_path, model_folder):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-opt', '--option', type=str,
-                        choices=['train', 'predict', 'tuning', 'multi_train', 'multi_predict', 'multi_tuning'])
+                        choices=['train', 'predict', 'tuning', 'finetune',
+                                 'multi_train', 'multi_predict', 'multi_tuning'])
     parser.add_argument('-c', '--input-config-json', type=str)
     parser.add_argument('-d', '--device', type=str, default=None)
     args = parser.parse_args()
@@ -1265,6 +1416,25 @@ if __name__ == '__main__':
             epoch=cf['epoch'],
             n_trials=cf['n_trials'] if 'n_trials' in cf.keys() else 1000,
             sampler=cf['sampler'] if 'sampler' in cf.keys() else 'tpe',
+            dev=args.device,
+            batch_size=cf['batch_size'],
+            log_scale=cf['log_scale'],
+            time_agg=cf['time_agg']
+        )
+        copy_json(args.input_config_json, cf['model_folder'])
+
+    elif args.option == 'finetune':
+        cf = cf['finetune']
+        assert cf['model_name'] in MODEL_LIST
+        audio_crowd_finetune(
+            input_folder_list=cf['input_folder_list'],
+            valid_folder_list=cf['valid_folder_list'] if 'valid_folder_list' in cf.keys() else None,
+            model_folder=cf['model_folder'],
+            pretrain_model_folder=cf['pretrain_model_folder'],
+            model_name=cf['model_name'],
+            model_param=cf['model_param'],
+            target=['count'] if 'target' not in cf.keys() else cf['target'],
+            epoch=cf['epoch'],
             dev=args.device,
             batch_size=cf['batch_size'],
             log_scale=cf['log_scale'],

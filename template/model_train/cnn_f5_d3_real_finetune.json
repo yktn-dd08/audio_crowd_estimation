@@ -1,0 +1,51 @@
+{
+    "finetune": {
+        "input_folder_list": [
+            "./workspace/record/office/20250923/K1_exp3_sneaker_p1",
+            "./workspace/record/office/20250923/K1_exp3_sneaker_p2"
+        ],
+        "valid_folder_list": [
+            "./workspace/record/office/20250923/K1_exp3_sneaker_p3"
+        ],
+        "model_folder": "./workspace/model/train/asphalt/SimpleCNN2_f5_d3_office20250923_K1_exp3_finetune",
+        "pretrain_model_folder": "./workspace/model/train/asphalt/SimpleCNN2_f5_d3_office20250923_K1_exp3",
+        "model_name": "SimpleCNN2",
+        "target": ["distance_3"],
+        "batch_size": 64,
+        "n_trials": 500,
+        "model_param": {
+            "finetune": [0, -1],
+            "time_sec": 5,
+            "frame_num": 501,
+            "freq_num": 64,
+
+            "layer_num": 3,
+            "kernel_size": [
+                9,
+                23,
+                23
+            ],
+            "dilation_size": [
+                3,
+                1,
+                1
+            ],
+            "inter_ch": [
+                16,
+                13,
+                12
+            ],
+            "pool_size": [
+                2,
+                1,
+                1
+            ],
+            "lr": 0.00001,
+            "weight_decay": 0.0,
+            "criterion": "MAE"
+        },
+        "epoch": 20,
+        "log_scale": true,
+        "time_agg": true
+    }
+}

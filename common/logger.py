@@ -3,6 +3,21 @@ from rich.logging import RichHandler
 
 
 def get_logger(name, level=logging.DEBUG):
+    """
+    loggerを取得する
+    Parameters
+    ----------
+    name: str
+        loggerの名前
+    level: int
+        loggerのレベル
+
+    Returns
+    -------
+    logger: logging.Logger
+        loggerオブジェクト
+    """
+    # 特定のモジュールのログレベルをCRITICALに設定して抑制
     for mod in ['numba', 'matplotlib', 'PIL']:
         logging.getLogger(mod).setLevel(logging.CRITICAL)
 

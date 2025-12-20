@@ -37,6 +37,23 @@ def trans_logmel(signal: np.ndarray | torch.Tensor, fs=16000):
 
 
 def set_list(param_name, param, list_size):
+    """
+    paramがlistでなければlist_size分のlistに変換
+    もしlistであればlist_sizeと長さが等しいことを確認
+    Parameters
+    ----------
+    param_name: str
+        パラメータ名（エラーメッセージ用）
+    param: int | float | list[int | float]
+        設定パラメータ
+    list_size: int
+        listの要素数
+
+    Returns
+    -------
+    param: list[int | float]
+        list化されたパラメータ
+    """
     if not isinstance(param, list):
         param = [param] * list_size
     else:
@@ -45,6 +62,25 @@ def set_list(param_name, param, list_size):
 
 
 def set_double_list(param_name, param, task_num: int, layer_num: list[int]):
+    """
+    paramが2重listでなければtask_num x layer_numの2重listに変換
+    もし2重listであればtask_numとlayer_numの長さが等しいことを確認
+    Parameters
+    ----------
+    param_name: str
+        パラメータ名（エラーメッセージ用）
+    param: int | float | list[int | float] | list[list[int | float]]
+        設定パラメータ
+    task_num: int
+        タスク数
+    layer_num: list[int]
+        各タスクの層数
+
+    Returns
+    -------
+    param: list[list[int | float]]
+        2重list化されたパラメータ
+    """
     assert task_num == len(layer_num), f'Input list[int] with {task_num} elements for layer_num.'
     if not isinstance(param, list):
         param = [[param] * layer_num[i] for i in range(task_num)]
@@ -144,6 +180,21 @@ class SimpleCNN2(nn.Module):
         x = torch.flatten(x, 1)
         x = self.regressor(x)
         return x
+
+    def freeze(self, finetune: list[int]):
+        # 一度全てのレイヤをfreeze
+        for param in self.parameters():
+            param.requires_grad = False
+        # finetuneで指定されたレイヤのみunfreeze
+        if 0 in finetune:
+            assert isinstance(self.conv[0], nn.Conv1d), 'The first layer is not Conv1d.'
+            for param in self.conv[0].parameters():
+                param.requires_grad = True
+        elif -1 in finetune:
+            for param in self.regressor.parameters():
+                param.requires_grad = True
+        return
+
 
     # @staticmethod
     # def set_list(param_name, param, list_size):
