@@ -19,7 +19,7 @@ from shapely.ops import split
 from joblib import Parallel, delayed
 from tqdm import tqdm
 from common.logger import get_logger
-
+from database.common import *
 
 INPUT_DIR = './data/speech'
 OUTPUT_DIR = './output'
@@ -389,18 +389,18 @@ class FootstepSound:
 
 class CrowdSim:
     @classmethod
-    def from_shp(cls, shp_path):
+    def from_shp(cls, shp_path, height=3.0, max_order=0):
         logger.info(msg=f'read shp - {shp_path}')
         df = gpd.read_file(shp_path)
         room_polygon = df['geometry'].loc[0]
-        return cls(room_polygon=room_polygon, height=3.0)
+        return cls(room_polygon=room_polygon, height=height, max_order=max_order)
 
-    def __init__(self, room_polygon: Polygon, height=3.0):
+    def __init__(self, room_polygon: Polygon, height=3.0, max_order=0):
         self.crowd_list = None
         self.footstep = []
         self.room_polygon = room_polygon
         room_coordinates = np.array(room_polygon.exterior.coords[:-1])
-        self.room_info = {'corners': room_coordinates.T, 'fs': SR, 'max_order': 0}
+        self.room_info = {'corners': room_coordinates.T, 'fs': SR, 'max_order': max_order}
         self.room_height = height
         self.mic_info = None
         self.foot_sound = FootstepSound(sampling_rate=SR)
@@ -476,13 +476,16 @@ class CrowdSim:
         Get audio signal for footstep of person {index}
         Parameters
         ----------
-        index: index of person
+        index: int
+            index of person
 
-        Returns audio signal
+        Returns
         -------
+        result: np.array
+            audio signal
+        """
         # TODO 一人の移動時間が長い場合にメモリエラーが出るため、pyroomacousticsのシミュレーションを分割する必要あり
 
-        """
         """
         {
                 'id': i,
@@ -647,11 +650,12 @@ class CrowdSim:
 
         Parameters
         ----------
-        index: index of person.
+        index : int
+            index of person.
 
         Returns
         -------
-        GeoDataFrame
+        df : GeoDataFrame
         """
         crowd = self.crowd_list[index]
         line = crowd.path.coords
@@ -660,6 +664,18 @@ class CrowdSim:
                               geometry=[LineString([line[r], line[r + 1]]) for r in range(record_num - 1)])
         df['id'] = index
         return df
+
+    def get_all_moving_features(self, verbose=True):
+        """
+        Get GeoDataFrame of all people as Moving Features Format (id, t, geometry)
+        Returns
+        -------
+        GeoDataFrame
+        """
+        crowd_df = pd.concat([self.get_person_moving_features(index)
+                              for index in tqdm(range(len(self.crowd_list)), disable=not verbose,
+                                                desc='[Generate Moving Features]')])
+        return crowd_df.reset_index().drop('index', axis=1)
 
     def decomposed_moving_feature(self, verbose=True):
         """
@@ -708,6 +724,52 @@ class CrowdSim:
         folder = os.path.dirname(csv_name)
         os.makedirs(folder, exist_ok=True)
         out_df.to_csv(csv_name, index=False)
+        return
+
+    def crowd_dendity_from_grid_shp(self, grid_shp: str, csv_name: str, time_step=1.0,
+                                    x_idx_range=None, y_idx_range=None, geom_flag=True, verbose=True):
+        # グリッドデータの読み込み
+        logger.info('Crowd density calculation from grid shapefile.')
+        grid_df = gpd.read_file(grid_shp)
+        if grid_df.crs is None:
+            grid_df.set_crs(epsg=BASE_SRID, inplace=True)
+        # グリッドの絞り込み
+        if x_idx_range is not None:
+            grid_df = grid_df[(grid_df['x_idx'] >= x_idx_range[0]) & (grid_df['x_idx'] <= x_idx_range[1])]
+        if y_idx_range is not None:
+            grid_df = grid_df[(grid_df['y_idx'] >= y_idx_range[0]) & (grid_df['y_idx'] <= y_idx_range[1])]
+        logger.info(f'grid num: {len(grid_df)}')
+
+        # 人流データの取得
+        logger.info('Get all moving features of crowd.')
+        crowd_df = self.get_all_moving_features(verbose=verbose)
+        crowd_df.set_crs(grid_df.crs, inplace=True)
+
+        # 人流データとグリッドデータの空間結合
+        logger.info('Calculating number of people flow at each grid.')
+        join_df = gpd.sjoin(crowd_df, grid_df[['grid_id', 'geometry']], how='left', predicate='intersects')
+        cnt_df = join_df.groupby(['t', 'grid_id'])['id'].nunique().reset_index(name='count')
+
+        # 全時刻 x 全グリッドの組み合わせを作成
+        t_df = pd.DataFrame({'t': np.arange(min([c.start_time for c in self.crowd_list]),
+                                            max([c.start_time + c.duration for c in self.crowd_list]) + time_step,
+                                            time_step)})
+        g_df = pd.DataFrame({'grid_id': grid_df['grid_id'].unique()})
+        tg_df = t_df.merge(g_df, how='cross')
+
+        cnt_df = tg_df.merge(cnt_df, on=['t', 'grid_id'], how='left').fillna({'count': 0})
+        cnt_df['count'] = cnt_df['count'].astype(int)
+        cnt_df['time_index'] = (cnt_df['t'] / time_step).astype(int)
+        GEOM_COL = 'geometry'
+        join_columns = [c for c in grid_df.columns if c != GEOM_COL]
+        if geom_flag:
+            join_columns.append(GEOM_COL)
+        cnt_df = pd.merge(cnt_df, grid_df[join_columns], on='grid_id', how='left')
+
+        logger.info('Saving crowd density csv file.')
+        folder = os.path.dirname(csv_name)
+        os.makedirs(folder, exist_ok=True)
+        cnt_df.to_csv(csv_name, index=False)
         return
 """
 from simulation.util import *
@@ -769,8 +831,8 @@ def test():
     return
 
 
-def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0,
-                           distance_list=None):
+def audio_crowd_simulation_(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0,
+                            distance_list=None, grid_shp=None):
     signal_info = {}
     if distance_list is None:
         distance_list = [1, 10, 20, 30, 40, 50]
@@ -856,6 +918,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--room-shp')
     parser.add_argument('-o', '--output-folder')
     parser.add_argument('-m', '--mic-shp')
+    parser.add_argument('-g', '--grid_shp')
     parser.add_argument('-n', '--snr', default=None, type=float)
     parser.add_argument('-t', '--time-unit', default=10.0, type=float)
     parser.add_argument('-opt', '--option', choices=['footstep', 'env'],
@@ -863,5 +926,5 @@ if __name__ == '__main__':
     parser.add_argument('-dl', '--distance-list', nargs='+', type=int, default=[1, 10, 20, 30, 40, 50])
     args = parser.parse_args()
     if args.option == 'footstep':
-        audio_crowd_simulation(args.crowd_csv, args.room_shp, args.output_folder, args.mic_shp, args.snr,
-                               args.time_unit, args.distance_list)
+        audio_crowd_simulation_(args.crowd_csv, args.room_shp, args.output_folder, args.mic_shp, args.snr,
+                                args.time_unit, args.distance_list, args.grid_shp)

@@ -10,6 +10,7 @@ import librosa
 import numpy as np
 import pandas as pd
 import scipy as sp
+import soundfile as sf
 import torch
 import torch.nn as nn
 from inspect import signature
@@ -54,17 +55,39 @@ def read_wav(input_folder, channel_num=1):
     result = []
     for ch in range(channel_num):
         wav_path = signal_info['info'][f'ch{ch}']['wav_path']
-        fs, signal = sp.io.wavfile.read(wav_path)
-        signal *= sig_max
-        if fs != FS:
-            signal = librosa.resample(y=signal, orig_sr=fs, target_sr=FS)
-        result.append(signal)
+        if wav_path.endswith('.wav'):
+            fs, signal = sp.io.wavfile.read(wav_path)
+            signal *= sig_max
+            if fs != FS:
+                signal = librosa.resample(y=signal, orig_sr=fs, target_sr=FS)
+            result.append(signal)
+        elif wav_path.endswith('.flac'):
+            # soundfileを使う
+            signal, fs = sf.read(wav_path)
+            signal *= sig_max
+            if fs != FS:
+                signal = librosa.resample(y=signal, orig_sr=fs, target_sr=FS)
+            result.append(signal)
     return np.array(result)
 
 
 def read_crowd(input_folder, channel_num=1):
-    with open(f'{input_folder}/signal_info.json') as f:
-        signal_info = json.load(f)
+    """
+    人流データ（人数）の読み込み
+    Parameters
+    ----------
+    input_folder : str
+        解析用データのフォルダパス
+    channel_num : int
+        読み込むチャンネル数
+
+    Returns
+    -------
+    result : list of dict
+        各チャンネルごとの人流データ
+    """
+    with open(f'{input_folder}/signal_info.json') as fp:
+        signal_info = json.load(fp)
     assert len(signal_info['microphone']) >= channel_num, 'channel_num must be less than microphone number'
     # distance_list = signal_info['distance_list'] if 'distance_list' in signal_info.keys() else None
     result = []
@@ -73,6 +96,19 @@ def read_crowd(input_folder, channel_num=1):
         df = pd.read_csv(crowd_path)
         result.append({col: df[col].tolist() for col in df.columns})
     return result
+
+
+def read_grid_crowd(input_folder, x_idx_range=None, y_idx_range=None):
+    with open(f'{input_folder}/signal_info.json') as fp:
+        signal_info = json.load(fp)
+    crowd_path = signal_info['crowd_path']
+    df = pd.read_csv(crowd_path)
+    if x_idx_range is not None:
+        df = df.loc[(df['x_idx'] >= x_idx_range[0]) & (df['x_idx'] <= x_idx_range[1])]
+    if y_idx_range is not None:
+        df = df.loc[(df['y_idx'] >= y_idx_range[0]) & (df['y_idx'] <= y_idx_range[1])]
+    piv_df = pd.pivot_table(df, index='t', columns=['x_idx', 'y_idx'], values='count', fill_value=0)
+    return {col: piv_df[col].tolist() for col in piv_df.columns}
 
 
 def calc_other_task(crowd, task_name):
@@ -128,6 +164,12 @@ def read_logmel_torch(input_folder, target=None, tasks=None,
         return x, y, task
     else:
         return x, y
+
+
+def read_logmel_multichannel(input_folder, channel_num, x_idx_range=None, y_idx_range=None,
+                             time_sec=1, log_scale=True, time_agg=False):
+    signal = [read_wav(input_folder=input_folder, channel_num=channel_num)]
+    return
 
 
 def read_logmel_torch_ast(input_folder, model_param, target=None, tasks=None,
@@ -321,8 +363,8 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
 
     valid_x, valid_y, valid_task = None, None, None
 
+    # valid_folder_listがNoneの時はinput_folder_listのデータをランダムで学習用、評価用に分割する
     if valid_folder_list is None:
-        # valid_folder_listがNoneの時はinput_folder_listのデータをランダムで学習用、評価用に分割する
         tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
         valid_x, valid_y = x[ts_idx], y[ts_idx]
         x, y = x[tr_idx], y[tr_idx]
@@ -366,6 +408,14 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
         return (x, y), (valid_x, valid_y)
     else:
         return (x, y, task), (valid_x, valid_y, valid_task)
+
+
+def load_dataset_multichannel(input_folder_list, valid_folder_list, model_name, model_param, time_agg, log_scale, target,
+                              valid_flag=True):
+    x, y = None, None
+    for i, input_folder in enumerate(input_folder_list):
+        pass
+    return
 
 
 def audio_crowd_model(model_name, model_param):

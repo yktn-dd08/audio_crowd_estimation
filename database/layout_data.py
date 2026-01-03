@@ -7,11 +7,11 @@ import time
 
 import pandas as pd
 import geopandas as gpd
-from database.crowd_data import get_where, get_roi_wkt
+from database.crowd_data import get_where, get_wkt_from_shp
 from sqlalchemy import create_engine
-from shapely.geometry import Polygon, Point
 
 from common.logger import get_logger
+from database.common import *
 logger = get_logger('database.layout_data')
 
 
@@ -78,9 +78,9 @@ def create_rectangle_roi_shp(pg_url, table_name, start_time, end_time, roi_shp, 
     #     logger.info(f'SQL Result - Polygon: {pol} - Total exec time: {time.time() - s} sec.')
     # # x_min, x_max, y_min, y_max = df['x_min'].loc[0], df['x_max'].loc[0], df['y_min'].loc[0], df['y_max'].loc[0]
     # roi = Polygon(pol)
-    roi_wkt = None if roi_shp is None else get_roi_wkt(roi_shp)
+    roi_wkt = None if roi_shp is None else get_wkt_from_shp(roi_shp)
     roi = get_rectangle_roi(pg_url, table_name, start_time, end_time, roi_wkt, percent)
-    gdf = gpd.GeoDataFrame(data=[{'id': 0}], geometry=[roi], crs=2450)
+    gdf = gpd.GeoDataFrame(data=[{'id': 0}], geometry=[roi], crs=BASE_SRID)
     folder = os.path.dirname(output_shp)
     os.makedirs(folder, exist_ok=True)
     gdf.to_file(filename=output_shp, driver='ESRI Shapefile')
@@ -90,7 +90,7 @@ def create_rectangle_roi_shp(pg_url, table_name, start_time, end_time, roi_shp, 
 
 def create_mic_shp(pg_url, table_name, start_time, end_time, roi_shp, mic_shp, height, x_num=1, y_num=1):
     assert x_num > 0 and y_num > 0, 'Input positive values as x_num and y_num.'
-    roi_wkt = None if roi_shp is None else get_roi_wkt(roi_shp)
+    roi_wkt = None if roi_shp is None else get_wkt_from_shp(roi_shp)
     roi = get_rectangle_roi(pg_url, table_name, start_time, end_time, roi_wkt)
     x_min = min([c[0] for c in roi.exterior.coords])
     x_max = max([c[0] for c in roi.exterior.coords])
@@ -105,7 +105,7 @@ def create_mic_shp(pg_url, table_name, start_time, end_time, roi_shp, mic_shp, h
     geom_list = [Point(x, y) for x, y in itertools.product(x_list, y_list)]
     df = gpd.GeoDataFrame(data=[{'id': i, 'height': height, 'x': geom_list[i].x, 'y': geom_list[i].y}
                                 for i in range(len(geom_list))],
-                          geometry=geom_list, crs=2450)
+                          geometry=geom_list, crs=BASE_SRID)
     folder = os.path.dirname(mic_shp)
     os.makedirs(folder, exist_ok=True)
     df.to_file(filename=mic_shp, driver='ESRI Shapefile')
@@ -113,9 +113,59 @@ def create_mic_shp(pg_url, table_name, start_time, end_time, roi_shp, mic_shp, h
     return
 
 
+def create_mic_shp_from_csv(input_csv, output_shp):
+    """
+    csvに格納されたx,yカラムからマイクの位置を示すshpファイルを作成する
+    Parameters
+    ----------
+    input_csv : str
+        入力csvファイルパス
+    output_shp : str
+        出力shpファイルパス
+
+    Returns
+    -------
+
+    """
+    df = pd.read_csv(input_csv)
+    geom_list = [Point(row['x'], row['y']) for idx, row in df.iterrows()]
+    gdf = gpd.GeoDataFrame(data=df, geometry=geom_list, crs=BASE_SRID)
+    folder = os.path.dirname(output_shp)
+    os.makedirs(folder, exist_ok=True)
+    gdf.to_file(filename=output_shp, driver='ESRI Shapefile')
+    logger.info(f'create shp: {output_shp}')
+    return
+
+
+def create_grid_shp_from_csv(input_csv, output_shp, buffer_size=0.5):
+    """
+    csvに格納されたx,yカラムからグリッドの位置を示すshpファイルを作成する
+    Parameters
+    ----------
+    input_csv : str
+        入力csvファイルパス
+    output_shp : str
+        出力shpファイルパス
+    buffer_size : float
+        グリッドの一辺の長さの半分
+
+    Returns
+    -------
+
+    """
+    df = pd.read_csv(input_csv)
+    geom_list = [grid_from_point(Point(row['x'], row['y']), buffer_size) for idx, row in df.iterrows()]
+    gdf = gpd.GeoDataFrame(data=df, geometry=geom_list, crs=BASE_SRID)
+    folder = os.path.dirname(output_shp)
+    os.makedirs(folder, exist_ok=True)
+    gdf.to_file(filename=output_shp, driver='ESRI Shapefile')
+    logger.info(f'create shp: {output_shp}')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-opt', '--option', type=str, choices=['roi', 'mic'])
+    parser.add_argument('-opt', '--option', type=str,
+                        choices=['roi', 'mic', 'csv2mic', 'csv2grid'], default='roi')
     parser.add_argument('-os', '--output-shp', type=str)
 
     parser.add_argument('-dh', '--db-host', type=str, default='localhost')
@@ -130,6 +180,9 @@ if __name__ == '__main__':
     parser.add_argument('-xn', '--x-num', type=int, default=1)
     parser.add_argument('-yn', '--y-num', type=int, default=1)
     parser.add_argument('-ht', '--height', type=float, default=0.05)
+    parser.add_argument('-bf', '--buffer-size', type=float, default=0.5)
+    parser.add_argument('-ic', '--input-csv', type=str)
+
     args = parser.parse_args()
 
     _pg_url = f'postgresql://{args.db_user}:{args.db_pw}@{args.db_host}:{args.db_port}/{args.db_name}'
@@ -139,3 +192,8 @@ if __name__ == '__main__':
     elif args.option == 'mic':
         create_mic_shp(_pg_url, args.layout+'_model', args.start_time, args.end_time, args.roi_shp, args.output_shp,
                        args.height, args.x_num, args.y_num)
+
+    elif args.option == 'csv2mic':
+        create_mic_shp_from_csv(args.input_csv, args.output_shp)
+    elif args.option == 'csv2grid':
+        create_grid_shp_from_csv(args.input_csv, args.output_shp, buffer_size=args.buffer_size)

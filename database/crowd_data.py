@@ -10,6 +10,7 @@ from shapely import line_merge
 from shapely.geometry import MultiLineString, LineString
 from joblib import Parallel, delayed
 from common.logger import get_logger
+from database.common import *
 logger = get_logger('database.crowd_data')
 
 
@@ -162,19 +163,13 @@ def set_crowd_data(trj_df):
     return
 
 
-def get_roi_wkt(roi_shp):
-    df = gpd.read_file(roi_shp)
-    geom = df['geometry'].loc[0]
-    return geom.wkt
-
-
 def export_trj_csv(pg_url, table_name, start_time, end_time, roi_shp, output_csv):
     # if isinstance(start_time, list):
     #     start_time = f'{start_time[0]} {start_time[1]}'
     # if isinstance(end_time, list):
     #     end_time = f'{end_time[0]} {end_time[1]}'
     trj_df = load_trj_df(pg_url, table_name, start_time, end_time,
-                         None if roi_shp is None else get_roi_wkt(roi_shp))
+                         None if roi_shp is None else get_wkt_from_shp(roi_shp))
     folder = os.path.dirname(output_csv)
     os.makedirs(folder, exist_ok=True)
     trj_df.to_csv(output_csv, index=False)

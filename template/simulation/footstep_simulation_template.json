@@ -1,0 +1,22 @@
+{
+    "roi_shp": "./data/gis/marunouchi/roi/marunouchi_roi1.shp",
+    "grid_shp": "./data/gis/marunouchi/grid/pf_grid.shp",
+    "mic_shp": "./data/gis/marunouchi/mic/marunouchi_mic09_3m.shp",
+    "snr": null,
+    "height": 3.0,
+    "max_orders": 0,
+    "x_idx_range": [-5, 5],
+    "y_idx_range": [-5, 5],
+    "task_list": {
+        "asphalt/train/roi1_crowd0807_09": {
+            "crowd_csv": "./data/gis/marunouchi/crowd/asphalt/train/roi1_crowd0807_09.csv",
+            "output_folder": "./workspace/sim/marunouchi/multi_channel/asphalt/train/roi1_crowd0807_09",
+            "params": {}
+        },
+        "asphalt/train/roi1_crowd0807_10": {
+            "crowd_csv": "./data/gis/marunouchi/crowd/asphalt/train/roi1_crowd0807_10.csv",
+            "output_folder": "./workspace/sim/marunouchi/multi_channel/asphalt/train/roi1_crowd0807_10",
+            "params": {}
+        }
+    }
+}
