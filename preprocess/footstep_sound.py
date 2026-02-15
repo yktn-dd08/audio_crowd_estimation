@@ -163,15 +163,47 @@ def add_foot_tag(input_csv, output_csv, config_json, foot_tag_json):
     return
 
 
+def execute_json(json_path):
+    with open(json_path, 'r') as f:
+        config = json.load(f)
+    option = config.get('option', 'foot_tag')
+    common_input = config.get('input', None)
+    common_output = config.get('output', None)
+    common_config_json = config.get('config_json', './footstep_config.json')
+    common_foot_tag_json = config.get('foot_tag_json', None)
+    task_list = config['task_list']
+    for task_name, task_config in task_list.items():
+        logger.info(f'Execute task: {task_name}')
+        if option == 'segment':
+            footstep_segmentation(
+                config_json=task_config.get('config_json', common_config_json),
+                input_folder=task_config.get('input', common_input),
+                output_folder=task_config.get('output', common_output)
+            )
+        elif option == 'foot_tag':
+            add_foot_tag(
+                input_csv=task_config.get('input', common_input),
+                output_csv=task_config.get('output', common_output),
+                config_json=task_config.get('config_json', common_config_json),
+                foot_tag_json=task_config.get('foot_tag_json', common_foot_tag_json)
+            )
+    logger.info(f'{len(task_list)} tasks are completed.')
+    return
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-opt', '--option', type=str, choices=['segment', 'foot_tag'], default='segment')
+    parser.add_argument('-opt', '--option', type=str, choices=['segment', 'foot_tag', 'json'],
+                        default='segment')
+    parser.add_argument('-ic', '--input-config-json', type=str)
     parser.add_argument('-i', '--input', type=str)
     parser.add_argument('-o', '--output', type=str)
     parser.add_argument('-c', '--config-json', type=str, default='./footstep_config.json')
     parser.add_argument('-f', '--foot-tag-json', type=str)
     args = parser.parse_args()
-    if args.option == 'segment':
+    if args.option == 'json':
+        execute_json(args.input_config_json)
+    elif args.option == 'segment':
         footstep_segmentation(args.config_json, args.input, args.output)
     elif args.option == 'foot_tag':
         add_foot_tag(args.input, args.output, args.config_json, args.foot_tag_json)

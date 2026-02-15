@@ -1,4 +1,77 @@
 # Database Script Usage Guide
+## Pedestrian Dataset
+### ATC dataset
+- 以下のURLより人流データをダウンロード可能
+- https://dil.atr.jp/crest2010_HRI/ATC_dataset/
+
+- 下記SQLにてTableを作成しておいてCSVファイルをインポートする
+```sql
+CREATE TABLE data (
+	time DOUBLE PRECISION NOT NULL,
+	id INTEGER NOT NULL DEFAULT '-1',
+	x INTEGER NOT NULL DEFAULT '0',
+	y INTEGER NOT NULL DEFAULT '0',
+	z DOUBLE PRECISION NOT NULL DEFAULT '0.000',
+	vel DOUBLE PRECISION NOT NULL DEFAULT '0.000',
+	mTheta DOUBLE PRECISION NOT NULL DEFAULT '0.000',
+	oTheta DOUBLE PRECISION NOT NULL DEFAULT '0.000'
+)
+```
+- インポート後は下記SQLにてフォーマット変換を行う
+```sql
+DROP TABLE IF EXISTS atc_point;
+SELECT id, to_timestamp(time::integer)::timestamp without time zone AS t, ST_Point(AVG(x)/1000, AVG(y)/1000) AS geom into atc_point
+FROM data GROUP BY time::integer, id HAVING id > -1;
+
+DROP TABLE IF EXISTS atc_model;
+WITH w AS (
+  SELECT
+    id,
+    t AS start_time,
+    LEAD(t)    OVER (PARTITION BY id ORDER BY t) AS end_time,
+    geom       AS p1,
+    LEAD(geom) OVER (PARTITION BY id ORDER BY t) AS p2
+  FROM atc_point
+)
+SELECT id, start_time, end_time, ST_MakeLine(p1, p2) AS line
+INTO atc_model FROM w WHERE end_time IS NOT NULL AND p2 IS NOT NULL AND end_time - start_time = INTERVAL '1 second'
+ORDER BY id, start_time;
+
+CREATE INDEX index_id_atc_model ON atc_model USING btree(id);
+CREATE INDEX index_start_time_atc_model ON atc_model USING btree(start_time);
+CREATE INDEX index_end_time_atc_model ON atc_model USING btree(end_time);
+CREATE INDEX index_line_atc_model ON atc_model USING gist(line);
+```
+
+### ETH dataset
+- 事前にCSVファイルをダウンロードしておき、カラム情報を入れておく必要がある。
+- CSVファイルのカラムは以下のような形式を想定。
+- CSV example: data/gis/ewap/org/seq_eth.csv
+
+| frame_number | pedestrian_ID | pos_x | pos_z | pos_y | v_x | v_z | v_y |
+|--------------|---------------|-------|-------|-------|-----|-----|-----|
+| 780          | 1             | 8.456 | 0.0   | 3.588 | 1.6 | 0.0 | 1.7 |
+| 786          | 1             | 9.125 | 0.0   | 3.658 | 1.6 | 0.0 | 3.2 |
+
+- 下記コマンドを打つことでPostgreSQLにインポート可能
+```commandline
+python -m database.datasets.eth_datasets -opt preprocess -i ./data/gis/ewap/org/seq_hotel.csv -o ./data/gis/ewap/org/ewap_hotel.csv
+python -m database.datasets.eth_datasets -opt store -i ./data/gis/ewap/org/ewap_eth.csv -dn ewap -lo eth
+```
+### DUT dataset
+- 事前にCSVファイルをダウンロードしておく
+- URL: https://github.com/dongfang-steven-yang/vci-dataset-dut/tree/master
+- 下記コマンドにより前処理
+```commandline
+python -m database.datasets.dut_datasets -opt preprocess -i ./data/gis/dut/org/trajectories_filtered/intersection_*_traj_ped_filtered.csv -o ./data/gis/dut/org/ped/intersection_ped.csv
+python -m database.datasets.dut_datasets -opt preprocess -i ./data/gis/dut/org/trajectories_filtered/roundabout_*_traj_ped_filtered.csv -o ./data/gis/dut/org/ped/roundabout_ped.csv
+```
+- 下記コマンドによりPostgreSQLにインポート
+```commandline
+python -m database.datasets.dut_datasets -opt store -i ./data/gis/dut/org/ped/intersection_ped.csv -dn dut -lo intersection
+python -m database.datasets.dut_datasets -opt store -i ./data/gis/dut/org/ped/roundabout_ped.csv -dn dut -lo roundabout
+```
+
 ## how to execute crowd_data.py
 
 ## how to execute layout_data.py

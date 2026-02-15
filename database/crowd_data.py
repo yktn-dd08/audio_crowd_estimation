@@ -1,6 +1,7 @@
 import argparse
 import os.path
 import time
+import json
 
 import pandas as pd
 import geopandas as gpd
@@ -176,11 +177,65 @@ def export_trj_csv(pg_url, table_name, start_time, end_time, roi_shp, output_csv
     return
 
 
+def execute_json(config_path):
+    with open(config_path, 'r') as f:
+        cfg = json.load(f)
+    option = cfg['option']
+    task_list = cfg['task_list']
+    # Get common parameters
+    common_roi_shp = cfg.get('roi_shp', None)
+    common_db_host = cfg.get('db_host', None)
+    common_db_port = cfg.get('db_port', None)
+    common_db_user = cfg.get('db_user', None)
+    common_db_pw = cfg.get('db_pw', None)
+    common_db_name = cfg.get('db_name', None)
+    common_layout = cfg.get('layout_name', None)
+    common_start_time = cfg.get('start_time', None)
+    common_end_time = cfg.get('end_time', None)
+    common_output_csv = cfg.get('output_csv', None)
+
+    if option == 'export':
+        for task_name, task_cfg in task_list.items():
+            logger.info(f'[task name]: {task_name}')
+            db_host = task_cfg.get('db_host', common_db_host)
+            db_port = task_cfg.get('db_port', common_db_port)
+            db_user = task_cfg.get('db_user', common_db_user)
+            db_pw = task_cfg.get('db_pw', common_db_pw)
+            db_name = task_cfg.get('db_name', common_db_name)
+            layout_name = task_cfg.get('layout_name', common_layout)
+            pg_url = f'postgresql://{db_user}:{db_pw}@{db_host}:{db_port}/{db_name}'
+            export_trj_csv(
+                pg_url=pg_url,
+                table_name=layout_name+'_model',
+                start_time=task_cfg.get('start_time', common_start_time),
+                end_time=task_cfg.get('end_time', common_end_time),
+                roi_shp=task_cfg.get('roi_shp', common_roi_shp),
+                output_csv=task_cfg.get('output_csv', common_output_csv)
+            )
+        # audio_crowd_simulation(
+        #     crowd_csv=task_cfg['crowd_csv'],
+        #     output_folder=task_cfg['output_folder'],
+        #     mic_shp=task_cfg.get('params', {}).get('mic_shp', common_mic_shp),
+        #     room_shp=task_cfg.get('params', {}).get('roi_shp', common_roi_shp),
+        #     grid_shp=task_cfg.get('params', {}).get('grid_shp', common_grid_shp),
+        #     snr=task_cfg.get('params', {}).get('snr', common_snr),
+        #     distance_list=task_cfg.get('params', {}).get('distance_list', common_distance_list),
+        #     time_unit=task_cfg.get('params', {}).get('time_unit', 10.0),
+        #     x_idx_range=task_cfg.get('params', {}).get('x_idx_range', common_x_idx_range),
+        #     y_idx_range=task_cfg.get('params', {}).get('y_idx_range', common_y_idx_range),
+        #     height=task_cfg.get('params', {}).get('height', common_height),
+        #     max_order=task_cfg.get('params', {}).get('max_order', common_max_order)
+        # )
+    logger.info(f'{len(task_list)} tasks are completed.')
+    return
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-opt', '--option', type=str, choices=['export'], default='export')
-    parser.add_argument('-oc', '--output-csv', type=str)
+    parser.add_argument('-opt', '--option', type=str, choices=['export', 'json'], default='export')
+    parser.add_argument('-ic', '--input-config', type=str)
 
+    parser.add_argument('-oc', '--output-csv', type=str)
     parser.add_argument('-dh', '--db-host', type=str, default='localhost')
     parser.add_argument('-dp', '--db-port', type=int, default=5432)
     parser.add_argument('-du', '--db-user', type=str, default='postgres')
@@ -195,3 +250,5 @@ if __name__ == '__main__':
     _pg_url = f'postgresql://{args.db_user}:{args.db_pw}@{args.db_host}:{args.db_port}/{args.db_name}'
     if args.option == 'export':
         export_trj_csv(_pg_url, args.layout + '_model', args.start_time, args.end_time, args.roi_shp, args.output_csv)
+    elif args.option == 'json':
+        execute_json(args.input_config)

@@ -1,0 +1,54 @@
+{
+    "option": "foot_tag",
+    "foot_tag_json": "./template/foottag/foottag_template_test.json",
+    "task_list": {
+        "asphalt/test/roi1_crowd1031_09": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_09.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_09.csv"
+        },
+        "asphalt/test/roi1_crowd1031_10": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_10.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_10.csv"
+        },
+        "asphalt/test/roi1_crowd1031_11": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_11.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_11.csv"
+        },
+        "asphalt/test/roi1_crowd1031_12": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_12.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_12.csv"
+        },
+        "asphalt/test/roi1_crowd1031_13": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_13.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_13.csv"
+        },
+        "asphalt/test/roi1_crowd1031_14": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_14.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_14.csv"
+        },
+        "asphalt/test/roi1_crowd1031_15": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_15.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_15.csv"
+        },
+        "asphalt/test/roi1_crowd1031_16": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_16.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_16.csv"
+        },
+        "asphalt/test/roi1_crowd1031_17": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_17.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_17.csv"
+        },
+        "asphalt/test/roi1_crowd1031_18": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_18.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_18.csv"
+        },
+        "asphalt/test/roi1_crowd1031_19": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_19.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_19.csv"
+        },
+        "asphalt/test/roi1_crowd1031_20": {
+            "input": "./data/gis/atc/crowd/org/roi1_crowd1031_20.csv",
+            "output": "./data/gis/atc/crowd/asphalt/test/roi1_crowd1031_20.csv"
+        }
+    }
+}

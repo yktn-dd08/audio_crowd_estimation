@@ -71,7 +71,7 @@ def read_wav(input_folder, channel_num=1):
     return np.array(result)
 
 
-def read_crowd(input_folder, channel_num=1):
+def read_crowd(input_folder, channel_num=1) -> list:
     """
     人流データ（人数）の読み込み
     Parameters
@@ -98,7 +98,7 @@ def read_crowd(input_folder, channel_num=1):
     return result
 
 
-def read_grid_crowd(input_folder, x_idx_range=None, y_idx_range=None):
+def read_grid_crowd(input_folder, x_idx_range=None, y_idx_range=None) -> dict:
     with open(f'{input_folder}/signal_info.json') as fp:
         signal_info = json.load(fp)
     crowd_path = signal_info['crowd_path']
@@ -108,6 +108,8 @@ def read_grid_crowd(input_folder, x_idx_range=None, y_idx_range=None):
     if y_idx_range is not None:
         df = df.loc[(df['y_idx'] >= y_idx_range[0]) & (df['y_idx'] <= y_idx_range[1])]
     piv_df = pd.pivot_table(df, index='t', columns=['x_idx', 'y_idx'], values='count', fill_value=0)
+    piv_df.columns = [f'count_x{col[0]}_y{col[1]}' for col in piv_df.columns]
+    piv_df = piv_df.reset_index(drop=True)
     return {col: piv_df[col].tolist() for col in piv_df.columns}
 
 
@@ -167,9 +169,97 @@ def read_logmel_torch(input_folder, target=None, tasks=None,
 
 
 def read_logmel_multichannel(input_folder, channel_num, x_idx_range=None, y_idx_range=None,
-                             time_sec=1, log_scale=True, time_agg=False):
-    signal = [read_wav(input_folder=input_folder, channel_num=channel_num)]
-    return
+                             option='torch', time_sec=1, log_scale=True, time_agg=True):
+    """
+    入力フォルダ内に含まれる音響信号群と人流データを読み込み、対数メルスペクトログラムと人流ヒートマップを返す（マルチチャンネル用）
+    Parameters
+    ----------
+    input_folder : str
+        解析用データのフォルダパス
+    channel_num : int
+        読み込むチャンネル数
+    x_idx_range : tuple of int | None
+        人流データのx方向インデックス範囲（(min, max)）、Noneの場合は全範囲
+    y_idx_range : tuple of int | None
+        人流データのy方向インデックス範囲（(min, max)）、Noneの場合は全範囲
+    option : str
+        logmel特徴量の抽出方法、'VGGish' or 'torch' or 'AST'
+    time_sec : int
+        1つのサンプルに含める時間長（秒）
+    log_scale : bool
+        目的変数を対数変換するかどうか
+    time_agg : bool
+        目的変数を時間平均値にするかどうか
+
+    Returns
+    -------
+    x : torch.Tensor
+        抽出したlogmel特徴量、shape: (channel_num, time_length, feature_dim, time_frame)
+    y : torch.Tensor
+        抽出した人流データ、shape: (time_length, grid_num)
+
+    """
+    # logmel特徴量の抽出方法は現状、下記のみ対応
+    assert option in ['VGGish', 'torch', 'AST'], 'option must be VGGish, torch or AST.'
+
+    # shape: (signal_length, 1)の音響信号のリストを読み込み: List[np.array]
+    signal_list = read_wav(input_folder=input_folder, channel_num=channel_num)
+
+    # 人流データ(dict形式)を読み込み、keyはグリッド座標に対応(ex. count_x0_y0)、valueは人数の時系列データ
+    crowd_grid = read_grid_crowd(input_folder=input_folder, x_idx_range=x_idx_range, y_idx_range=y_idx_range)
+
+    # 時間長を算出（一番短いものに合わせる）
+    time_length = min(
+        int(min([len(signal) for signal in signal_list]) / FS),  # 音響信号に関する最も短い時間長
+        len(list(crowd_grid.values())[0])
+    )
+
+    x, y = None, None
+    if option == 'torch':
+        x = [
+            [
+                trans_logmel(signal[FS * (t + 1 - time_sec):FS * (t + 1)], FS)
+                for t in range(time_sec - 1,time_length)
+            ]
+            for signal in signal_list
+        ]
+        x = torch.stack([torch.stack(xx) for xx in x])
+    elif option == 'VGGish':
+        logmel_func = VGGISH.get_input_processor()
+        x = [
+            [
+                logmel_func(torch.Tensor(signal[FS * (t + 1 - time_sec):FS * (t + 1)]))
+                for t in range(time_sec - 1, time_length)
+            ]
+            for signal in signal_list
+        ]
+        x = torch.stack([torch.stack(xx) for xx in x])
+    elif option == 'AST':
+        raise Exception('Not implemented yet.')
+
+    # 人流データの整形（今は2次元グリッドを1次元ベクトルで表現）
+    # TODO 2次元グリッドのまま扱う場合の実装追加
+    # col_list -> keys: count_x0_y0, count_x0_y1, count_x1_y0, count_x1_y1, ...
+    col_list = [col for col in crowd_grid.keys() if col.startswith('count_')]
+    if x_idx_range is not None and y_idx_range is not None:
+        col_list = [f'count_x{xi}_y{yi}'
+                    for xi in range(x_idx_range[0], x_idx_range[1]+1)
+                    for yi in range(y_idx_range[0], y_idx_range[1]+1)]
+    if time_agg:
+        # 時間平均値を目的変数とする場合
+        y_np = np.array([[sum(crowd_grid[cnt][t + 1 - time_sec:t + 1]) / time_sec
+                          for t in range(time_sec - 1, time_length)]
+                         for cnt in col_list]).T
+    else:
+        # 時間ごとの値を目的変数とする場合
+        y_np = np.array([crowd_grid[cnt][time_sec - 1:time_length] for cnt in col_list]).T
+
+    if log_scale:
+        # 対数変換
+        y_np = np.log(y_np + 1.0)
+
+    y = torch.Tensor(y_np)
+    return x, y
 
 
 def read_logmel_torch_ast(input_folder, model_param, target=None, tasks=None,
@@ -410,11 +500,29 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
         return (x, y, task), (valid_x, valid_y, valid_task)
 
 
-def load_dataset_multichannel(input_folder_list, valid_folder_list, model_name, model_param, time_agg, log_scale, target,
-                              valid_flag=True):
+def load_dataset_multichannel(input_folder_list, valid_folder_list, model_name, model_param,
+                              x_idx_range=None, y_idx_range=None,
+                              time_agg=True, log_scale=True, valid_flag=True):
+    # TODO AST未対応
+    option = 'VGGish' if 'VGGish' in model_name else 'torch'
+
     x, y = None, None
+    # input_folder_listのデータを読み込み
     for i, input_folder in enumerate(input_folder_list):
-        pass
+        logger.info(f'Reading Training Folders: {input_folder}')
+        tmp_x, tmp_y = read_logmel_multichannel(
+            input_folder=input_folder,
+            channel_num=model_param['channel_num'],
+            x_idx_range=x_idx_range,
+            y_idx_range=y_idx_range,
+            option=option,
+            time_sec=model_param['time_sec'],
+            time_agg=time_agg,
+            log_scale=log_scale
+        )
+        x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+        y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+
     return
 
 

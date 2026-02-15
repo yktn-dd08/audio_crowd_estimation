@@ -8,7 +8,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
                            height=3.0, max_order=0):
     signal_info = {}
     if distance_list is None:
-        distance_list = [1, 10, 20, 30, 40, 50]
+        distance_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50]
     signal_info['distance_list'] = distance_list
 
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)

@@ -1,0 +1,132 @@
+{
+    "option": "export",
+    "db_host": "localhost",
+    "db_port": 5432,
+    "db_user": "postgres",
+    "db_pw": "postgres",
+    "db_name": "atc",
+    "layout_name": "atc",
+    "roi_shp": "./data/gis/atc/roi/atc_roi01.shp",
+    "task_list": {
+        "roi1_crowd1024_09": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_09.csv",
+            "start_time": ["2012-10-24", "09:00:00"],
+            "end_time": ["2012-10-24", "10:00:00"]
+        },
+        "roi1_crowd1024_10": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_10.csv",
+            "start_time": ["2012-10-24", "10:00:00"],
+            "end_time": ["2012-10-24", "11:00:00"]
+        },
+        "roi1_crowd1024_11": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_11.csv",
+            "start_time": ["2012-10-24", "11:00:00"],
+            "end_time": ["2012-10-24", "12:00:00"]
+        },
+        "roi1_crowd1024_12": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_12.csv",
+            "start_time": ["2012-10-24", "12:00:00"],
+            "end_time": ["2012-10-24", "13:00:00"]
+        },
+        "roi1_crowd1024_13": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_13.csv",
+            "start_time": ["2012-10-24", "13:00:00"],
+            "end_time": ["2012-10-24", "14:00:00"]
+        },
+        "roi1_crowd1024_14": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_14.csv",
+            "start_time": ["2012-10-24", "14:00:00"],
+            "end_time": ["2012-10-24", "15:00:00"]
+        },
+        "roi1_crowd1024_15": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_15.csv",
+            "start_time": ["2012-10-24", "15:00:00"],
+            "end_time": ["2012-10-24", "16:00:00"]
+        },
+        "roi1_crowd1024_16": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_16.csv",
+            "start_time": ["2012-10-24", "16:00:00"],
+            "end_time": ["2012-10-24", "17:00:00"]
+        },
+        "roi1_crowd1024_17": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_17.csv",
+            "start_time": ["2012-10-24", "17:00:00"],
+            "end_time": ["2012-10-24", "18:00:00"]
+        },
+        "roi1_crowd1024_18": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_18.csv",
+            "start_time": ["2012-10-24", "18:00:00"],
+            "end_time": ["2012-10-24", "19:00:00"]
+        },
+        "roi1_crowd1024_19": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_19.csv",
+            "start_time": ["2012-10-24", "19:00:00"],
+            "end_time": ["2012-10-24", "20:00:00"]
+        },
+        "roi1_crowd1024_20": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1024_20.csv",
+            "start_time": ["2012-10-24", "20:00:00"],
+            "end_time": ["2012-10-24", "21:00:00"]
+        },
+        "roi1_crowd1031_09": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_09.csv",
+            "start_time": ["2012-10-31", "09:00:00"],
+            "end_time": ["2012-10-31", "10:00:00"]
+        },
+        "roi1_crowd1031_10": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_10.csv",
+            "start_time": ["2012-10-31", "10:00:00"],
+            "end_time": ["2012-10-31", "11:00:00"]
+        },
+        "roi1_crowd1031_11": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_11.csv",
+            "start_time": ["2012-10-31", "11:00:00"],
+            "end_time": ["2012-10-31", "12:00:00"]
+        },
+        "roi1_crowd1031_12": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_12.csv",
+            "start_time": ["2012-10-31", "12:00:00"],
+            "end_time": ["2012-10-31", "13:00:00"]
+        },
+        "roi1_crowd1031_13": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_13.csv",
+            "start_time": ["2012-10-31", "13:00:00"],
+            "end_time": ["2012-10-31", "14:00:00"]
+        },
+        "roi1_crowd1031_14": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_14.csv",
+            "start_time": ["2012-10-31", "14:00:00"],
+            "end_time": ["2012-10-31", "15:00:00"]
+        },
+        "roi1_crowd1031_15": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_15.csv",
+            "start_time": ["2012-10-31", "15:00:00"],
+            "end_time": ["2012-10-31", "16:00:00"]
+        },
+        "roi1_crowd1031_16": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_16.csv",
+            "start_time": ["2012-10-31", "16:00:00"],
+            "end_time": ["2012-10-31", "17:00:00"]
+        },
+        "roi1_crowd1031_17": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_17.csv",
+            "start_time": ["2012-10-31", "17:00:00"],
+            "end_time": ["2012-10-31", "18:00:00"]
+        },
+        "roi1_crowd1031_18": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_18.csv",
+            "start_time": ["2012-10-31", "18:00:00"],
+            "end_time": ["2012-10-31", "19:00:00"]
+        },
+        "roi1_crowd1031_19": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_19.csv",
+            "start_time": ["2012-10-31", "19:00:00"],
+            "end_time": ["2012-10-31", "20:00:00"]
+        },
+        "roi1_crowd1031_20": {
+            "output_csv": "./data/gis/atc/crowd/roi1_crowd1031_20.csv",
+            "start_time": ["2012-10-31", "20:00:00"],
+            "end_time": ["2012-10-31", "21:00:00"]
+        }
+    }
+}
