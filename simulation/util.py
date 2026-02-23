@@ -363,10 +363,25 @@ class FootstepSound:
     def __read_wav_file(filename, fs, normalize=True):
         _fs, signal = wavfile.read(filename)
         signal = signal.astype(float)
+
+        # Convert stereo to mono if necessary
+        if signal.ndim > 1:
+            signal = signal.mean(axis=1)
+
         if _fs != fs:
             signal = librosa.resample(y=signal, orig_sr=_fs, target_sr=fs)
+
+        # Validate signal before normalization
+        if len(signal) == 0:
+            logger.warning(f'Empty signal from {filename}')
+            return np.array([0.0])  # Return minimal signal
+
         if normalize:
-            signal = signal / signal.std()
+            std = signal.std()
+            if std > 0:
+                signal = signal / std
+            else:
+                logger.warning(f'Signal from {filename} has zero standard deviation. Using original signal.')
         return signal
 
     def get_rnd_sound_index(self, tag):
@@ -506,18 +521,42 @@ class CrowdSim:
             Exception('Not set crowd data.')
         room = self.create_room()
         person_footstep = self.footstep[index]
+
+        # Handle empty footstep list
+        if not person_footstep:
+            logger.warning(f'No footsteps for person {index}')
+            return np.zeros([room.n_mics, 1])
+
         foot_tag = self.foot_sound.get_tags()[0]
         offset_time = min([foot['t'] for foot in person_footstep])
         for foot in person_footstep:
             p = [foot['point'].x, foot['point'].y, 0.0]
             if room.is_inside(p):
-                room.add_source(position=p,
-                                signal=self.foot_sound.get_wav(foot_tag, -1),
-                                delay=foot['t']-offset_time)
+                try:
+                    sig = self.foot_sound.get_wav(foot_tag, -1)
+                    # Validate signal before adding source
+                    if sig is None or len(sig) == 0 or np.any(np.isnan(sig)) or np.any(np.isinf(sig)):
+                        logger.warning(f'Invalid signal for person {index}, foot_tag {foot_tag}')
+                        continue
+                    room.add_source(position=p,
+                                    signal=sig,
+                                    delay=foot['t']-offset_time)
+                except Exception as e:
+                    logger.warning(f'Error adding source for person {index}: {str(e)}')
+                    continue
+
         if room.n_sources == 0:
+            logger.debug(f'No valid sources added for person {index}')
             return np.zeros([room.n_mics, 1])
-        room.simulate()
-        simulated_sound = room.mic_array.signals
+
+        try:
+            logger.debug(f'Simulating person {index} with {room.n_sources} source(s)')
+            room.simulate()
+            simulated_sound = room.mic_array.signals
+        except Exception as e:
+            logger.warning(f'Simulation failed for person {index} with {room.n_sources} sources: {type(e).__name__}: {str(e)}')
+            return np.zeros([room.n_mics, 1])
+
         result = np.concatenate([np.zeros([room.n_mics, int(offset_time*room.fs)]), simulated_sound],
                                 axis=1)
         return result
@@ -560,11 +599,24 @@ class CrowdSim:
                 p = [sim_param['x'][i], sim_param['y'][i], sim_param['z'][i]]
                 sig = self.foot_sound.get_wav(sim_param['foot_tag'][i], sim_param['sound_index'][i])
                 if room.is_inside(p):
-                    room.add_source(position=p, signal=sig, delay=sim_param['t'][i] - sim_param['offset'])
+                    try:
+                        # Validate signal before adding source
+                        if sig is None or len(sig) == 0 or np.any(np.isnan(sig)) or np.any(np.isinf(sig)):
+                            logger.warning(f'Invalid signal for group {sim_param["group"]}, sound_index {sim_param["sound_index"][i]}')
+                            continue
+                        room.add_source(position=p, signal=sig, delay=sim_param['t'][i] - sim_param['offset'])
+                    except Exception as e:
+                        logger.warning(f'Error adding source for group {sim_param["group"]}: {str(e)}')
+                        continue
             simulated_sound = np.zeros([room.n_mics, 1])
             if room.n_sources > 0:
-                room.simulate()
-                simulated_sound = room.mic_array.signals
+                try:
+                    # logger.debug(f'Simulating group {sim_param["group"]} with {room.n_sources} source(s)')
+                    room.simulate()
+                    simulated_sound = room.mic_array.signals
+                except Exception as e:
+                    logger.warning(f'Simulation failed for group {sim_param["group"]} with {room.n_sources} sources: {type(e).__name__}: {str(e)}')
+                    simulated_sound = np.zeros([room.n_mics, 1])
             result = {'delay': int(room.fs * sim_param['offset']), 'signal': simulated_sound,
                       'group': sim_param['group']}
             return result
@@ -608,6 +660,13 @@ class CrowdSim:
             # return sim_result
         else:
             people_sound = [self.person_sim(i) for i in tqdm(range(len(self.crowd_list)))]
+
+            # Handle empty results
+            if not people_sound:
+                logger.warning('No audio signals generated from any person')
+                # Return empty signal with proper shape
+                return np.zeros((len(self.mic_info), 1))
+
             ch = people_sound[0].shape[0]
             audio_size = max([ps.shape[1] for ps in people_sound])
             sim_result = np.zeros((ch, audio_size))
