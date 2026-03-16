@@ -1,0 +1,60 @@
+{
+    "option": "tuning_multichannel",
+    "device": "mps",
+    "optuna": {
+        "input_folder_list": [
+            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_12",
+            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_13",
+            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_14",
+            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_15",
+            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_16",
+            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_17"
+        ],
+        "valid_folder_list": [
+            "./workspace/sim/atc/multi_channel/asphalt/test/roi1_crowd1031_14"
+        ],
+        "model_folder": "./workspace/model/optuna/asphalt/multi_channel/atc_MultiChannelSimpleCNN_f5_d3",
+        "model_name": "MultiChannelSimpleCNN",
+        "batch_size": 64,
+        "model_param": {
+            "time_sec": 5,
+            "frame_num": 501,
+            "freq_num": 64,
+
+            "channel_num": 9,
+            "out_features": 81,
+
+            "layer_num": 3,
+            "kernel_size": {
+                "type": "list[int]",
+                "size": "layer_num",
+                "high": 31,
+                "low": 3
+            },
+            "dilation_size": {
+                "type": "list[int]",
+                "size": "layer_num",
+                "high": 11,
+                "low": 1
+            },
+            "inter_ch": {
+                "type": "list[int]",
+                "size": "layer_num",
+                "high": 16,
+                "low": 2
+            },
+            "pool_size": {
+                "type": "list[int]",
+                "size": "layer_num",
+                "high": 3,
+                "low": 1
+            },
+            "lr": 0.00001,
+            "weight_decay": 0.0,
+            "criterion": "MAE"
+        },
+        "epoch": 50,
+        "log_scale": true,
+        "time_agg": true
+    }
+}

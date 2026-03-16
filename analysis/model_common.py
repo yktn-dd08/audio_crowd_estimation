@@ -4,6 +4,7 @@ import math
 
 import torch
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 from tqdm import tqdm
@@ -41,6 +42,26 @@ def model_train(model, train_loader, criterion, optimizer, epoch, verbose=True):
             optimizer.zero_grad()
             output = model(x)
             loss = criterion(output, y)
+            loss.backward()
+            train_loss_tmp = loss.item()
+            train_loss += train_loss_tmp
+            optimizer.step()
+
+    return train_loss / len(train_loader.dataset)
+
+
+def model_train_wg(model, train_loader, criterion, optimizer, epoch, dev, verbose=True):
+    model.train()
+    train_loss = 0
+    train_loss_tmp = 0
+    with tqdm(train_loader, disable=not verbose) as _train_loader:
+        for batch_idx, (x, y) in enumerate(_train_loader):
+            _train_loader.set_description(f'[Epoch {epoch:03} - TRAIN]')
+            _train_loader.set_postfix(LOSS=train_loss_tmp, LOSS_SUM=train_loss / len(train_loader.dataset))
+
+            optimizer.zero_grad()
+            output = model(x.to(dev))
+            loss = criterion(output, y.to(dev))
             loss.backward()
             train_loss_tmp = loss.item()
             train_loss += train_loss_tmp
@@ -93,6 +114,43 @@ def model_test(model, test_loader, criterion, epoch, verbose=True):
     return test_loss / len(test_loader.dataset)
 
 
+def model_test_wg(model, test_loader, criterion, epoch, dev, verbose=True):
+    """
+    学習、評価時にGPU転送する場合のメソッド
+    Parameters
+    ----------
+    model: torch.nn.Module
+        学習するモデル
+    test_loader: torch.utils.data.DataLoader
+        テストデータのDataLoader
+    criterion: torch.nn.Module
+        損失関数
+    epoch: int
+        エポック数
+    dev: torch.device
+        使用するデバイス
+    verbose: bool
+        進捗表示の有無
+
+    Returns
+    -------
+
+    """
+    model.eval()
+    test_loss = 0
+    test_loss_tmp = 0
+    with torch.no_grad():
+        with tqdm(test_loader, disable=not verbose) as _test_loader:
+            for batch_idx, (x, y) in enumerate(_test_loader):
+                _test_loader.set_description(f'[Epoch {epoch:03} - TEST]')
+                _test_loader.set_postfix(LOSS=test_loss_tmp, LOSS_SUM=test_loss / len(test_loader.dataset))
+                output = model(x.to(dev))
+                loss = criterion(output, y.to(dev))
+                test_loss_tmp = loss.item()
+                test_loss += test_loss_tmp
+    return test_loss / len(test_loader.dataset)
+
+
 def model_test_multitask(model, test_loader, criterion, task_criterion, epoch, weight=0.5, verbose=True):
     model.eval()
     total_loss, total_loss_tmp = 0, 0
@@ -126,6 +184,25 @@ def model_predict(model, test_loader, verbose=True):
         with tqdm(test_loader, disable=not verbose) as _test_loader:
             for batch_idx, (x, y) in enumerate(_test_loader):
                 output = model(x)
+                target_list.append(y.to('cpu').detach().numpy())
+                output_list.append(output.to('cpu').detach().numpy())
+                # target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
+                # output_np = np.concatenate([output_np, output.to('cpu').detach().numpy()], axis=0)
+    target_np = np.concatenate(target_list, axis=0)
+    output_np = np.concatenate(output_list, axis=0)
+    return target_np, output_np
+
+
+def model_predict_wg(model, test_loader, dev, verbose=True):
+    model.eval()
+    target_list = []
+    output_list = []
+    # target_np = np.empty([0, 1])
+    # output_np = np.empty([0, 1])
+    with torch.no_grad():
+        with tqdm(test_loader, disable=not verbose) as _test_loader:
+            for batch_idx, (x, y) in enumerate(_test_loader):
+                output = model(x.to(dev))
                 target_list.append(y.to('cpu').detach().numpy())
                 output_list.append(output.to('cpu').detach().numpy())
                 # target_np = np.concatenate([target_np, y.to('cpu').detach().numpy()], axis=0)
@@ -213,4 +290,74 @@ def calculate_accuracy(target_np, output_np, json_path):
            'mape': float(mean_absolute_percentage_error(target_np, output_np))}
     with open(json_path, 'w') as f:
         json.dump(acc, f, indent=4)
+    return
+
+
+def write_result(folder, target_np, output_np, target, label, log_scale):
+    """
+    解析結果の保存
+    Parameters
+    ----------
+    folder: str
+        保存先フォルダ
+    target_np: np.ndarray
+        目的変数のnumpy配列
+    output_np: np.ndarray
+        予測値のnumpy配列
+    target: list
+        目的変数のカラム名リスト
+    label: str
+        保存ファイル名のラベル
+    log_scale: bool
+        目的変数が対数変換されているかどうか
+
+    Returns
+    -------
+
+    """
+    if log_scale:
+        target_np = np.exp(target_np) - 1
+        output_np = np.exp(output_np) - 1
+    target_df = pd.DataFrame(target_np)
+    target_df.columns = [f'target_{t}' for t in target]
+    output_df = pd.DataFrame(output_np)
+    output_df.columns = [f'predict_{t}' for t in target]
+    res_df = pd.concat([target_df, output_df], axis=1)
+    res_df.to_csv(f'{folder}/{label}_result.csv', index=False)
+    for t in target:
+        calculate_accuracy(target_df[f'target_{t}'].values, output_df[f'predict_{t}'].values,
+                           f'{folder}/{label}_acc_{t}.json')
+    return
+
+
+def plot_result(folder, target_np, output_np, target: list, label, log_scale):
+    """
+    解析結果のプロット保存
+    Parameters
+    ----------
+    folder: str
+        保存先フォルダ
+    target_np: np.ndarray
+        目的変数のnumpy配列
+    output_np: np.ndarray
+        予測値のnumpy配列
+    target: list
+        目的変数のカラム名リスト
+    label: str
+        保存ファイル名のラベル
+    log_scale: bool
+        目的変数が対数変換されているかどうか
+
+    Returns
+    -------
+
+    """
+    assert len(target) == target_np.shape[1], f'Invalid size. target: {target}, target_np.shape: {target_np.shape}.'
+    if log_scale:
+        for i, t in enumerate(target):
+            scatter_plot(target_np[:, i], output_np[:, i], f'{folder}/{label}_scatter_log_{t}.png')
+        target_np = np.exp(target_np) - 1
+        output_np = np.exp(output_np) - 1
+    for i, t in enumerate(target):
+        scatter_plot(target_np[:, i], output_np[:, i], f'{folder}/{label}_scatter_{t}.png')
     return

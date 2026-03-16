@@ -121,6 +121,9 @@ class SimpleCNN(nn.Module):
 
 
 class SimpleCNN2(nn.Module):
+    '''
+    1D-CNN -> フラット化 -> 線型結合によるモデル
+    '''
     def __init__(
             self,
             freq_num: int,
@@ -256,11 +259,259 @@ class SimpleCNN2(nn.Module):
             return False
         return True
 
+
+class SimpleCNN3(nn.Module):
+    '''
+    1D-CNN -> 時間方向に関するAverage Pooling -> 線型結合によるモデル
+    '''
+    def __init__(
+            self,
+            freq_num: int,
+            frame_num: int,
+            kernel_size: int | list[int],
+            dilation_size: int | list[int],
+            layer_num: int,
+            inter_ch: int | list[int],
+            pool_size: int | list[int] = 2,
+            out_features=1
+    ):
+        super(SimpleCNN3, self).__init__()
+
+        kernel_size = set_list('kernel_size', kernel_size, layer_num)
+        dilation_size = set_list('dilation_size', dilation_size, layer_num)
+        inter_ch = set_list('inter_ch', inter_ch, layer_num)
+        pool_size = set_list('pool_size', pool_size, layer_num)
+
+        self.conv = nn.ModuleList()
+        for l in range(layer_num):
+            self.conv.append(
+                nn.Conv1d(
+                    in_channels=freq_num if l == 0 else inter_ch[l-1],
+                    out_channels=inter_ch[l],
+                    kernel_size=kernel_size[l],
+                    dilation=dilation_size[l]
+                )
+            )
+            self.conv.append(nn.ReLU())
+            self.conv.append(nn.MaxPool1d(kernel_size=pool_size[l]))
+        reg_time = frame_num
+        for l in range(layer_num):
+            reg_time = reg_time - dilation_size[l] * (kernel_size[l] - 1)
+            reg_time = int(reg_time / pool_size[l])
+        self.avg_pool = nn.AdaptiveAvgPool1d(output_size=1)
+        self.regressor = nn.Linear(in_features=inter_ch[-1], out_features=out_features)
+
+    def forward(self, x):
+        for mod in self.conv:
+            x = mod(x)
+        x = self.avg_pool(x)
+        x = torch.flatten(x, 1)
+        x = self.regressor(x)
+        return x
+
+    def freeze(self, finetune: list[int]):
+        # 一度全てのレイヤをfreeze
+        for param in self.parameters():
+            param.requires_grad = False
+        # finetuneで指定されたレイヤのみunfreeze
+        if 0 in finetune:
+            assert isinstance(self.conv[0], nn.Conv1d), 'The first layer is not Conv1d.'
+            for param in self.conv[0].parameters():
+                param.requires_grad = True
+        elif -1 in finetune:
+            for param in self.regressor.parameters():
+                param.requires_grad = True
+        return
+
+
+    # @staticmethod
+    # def set_list(param_name, param, list_size):
+    #     if not isinstance(param, list):
+    #         param = [param] * list_size
+    #     else:
+    #         assert len(param) == list_size, f'Input List[int] with {list_size} elements for {param_name}.'
+    #     return param
+
+    @staticmethod
+    def is_valid(
+            freq_num: int,
+            frame_num: int,
+            kernel_size: int | list[int],
+            dilation_size: int | list[int],
+            layer_num: int,
+            inter_ch: int | list[int],
+            pool_size: int | list[int] = 2
+    ):
+        if not isinstance(kernel_size, list):
+            kernel_size = [kernel_size] * layer_num
+        elif len(kernel_size) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as kernel_size.')
+            return False
+        if not isinstance(dilation_size, list):
+            dilation_size = [dilation_size] * layer_num
+        elif len(dilation_size) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as dilation_size.')
+            return False
+        if not isinstance(inter_ch, list):
+            inter_ch = [inter_ch] * layer_num
+        elif len(inter_ch) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as inter_ch.')
+            return False
+        if not isinstance(pool_size, list):
+            pool_size = [pool_size] * layer_num
+        elif len(pool_size) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as pool_size.')
+            return False
+
+        model_params = {
+            'freq_num': freq_num,
+            'frame_num': frame_num,
+            'kernel_size': kernel_size,
+            'dilation_size': dilation_size,
+            'layer_num': layer_num,
+            'inter_ch': inter_ch,
+            'pool_size': pool_size
+        }
+        reg_time = frame_num
+        ok_layer_num = 0
+        for l in range(layer_num):
+            reg_time = reg_time - dilation_size[l] * (kernel_size[l] - 1)
+            reg_time = int(reg_time / pool_size[l])
+            if reg_time > 0:
+                ok_layer_num = l
+        if reg_time < 1:
+            logger.warning(f'Invalid model parameters, {model_params}. You should input {ok_layer_num + 1} as `layer_num` maybe.')
+            return False
+        return True
+
+
+class MultiChannelSimpleCNN(nn.Module):
+    '''
+    各チャネルに共通のSimpleCNN3を適用し、チャネル方向に結合して線型結合するモデル
+    '''
+    def __init__(
+            self,
+            freq_num: int,
+            frame_num: int,
+            kernel_size: int | list[int],
+            dilation_size: int | list[int],
+            layer_num: int,
+            inter_ch: int | list[int],
+            pool_size: int | list[int],
+            channel_num: int,
+            out_features: int
+    ):
+        super(MultiChannelSimpleCNN, self).__init__()
+
+        kernel_size = set_list('kernel_size', kernel_size, layer_num)
+        dilation_size = set_list('dilation_size', dilation_size, layer_num)
+        inter_ch = set_list('inter_ch', inter_ch, layer_num)
+        pool_size = set_list('pool_size', pool_size, layer_num)
+
+        self.conv = nn.ModuleList()
+        for l in range(layer_num):
+            self.conv.append(
+                nn.Conv1d(
+                    in_channels=freq_num if l == 0 else inter_ch[l - 1],
+                    out_channels=inter_ch[l],
+                    kernel_size=kernel_size[l],
+                    dilation=dilation_size[l]
+                )
+            )
+            self.conv.append(nn.ReLU())
+            self.conv.append(nn.MaxPool1d(kernel_size=pool_size[l]))
+        reg_time = frame_num
+        for l in range(layer_num):
+            reg_time = reg_time - dilation_size[l] * (kernel_size[l] - 1)
+            reg_time = int(reg_time / pool_size[l])
+        self.avg_pool = nn.AdaptiveAvgPool1d(output_size=1)
+        self.channel_num = channel_num
+        self.regressor = nn.Linear(in_features=channel_num * inter_ch[-1], out_features=out_features)
+
+    def each_channel(self, x):
+        for mod in self.conv:
+            x = mod(x)
+        x = self.avg_pool(x)
+        return x
+
+
+    def forward(self, x):
+        """
+
+        Parameters
+        ----------
+        x: Tensor [batch_size x channel_num x freq_num x frame_num]
+
+        Returns
+        -------
+
+        """
+        x = [self.each_channel(x[:, ch, :, :]) for ch in range(self.channel_num)]
+        x = torch.cat(x, dim=2)
+        x = torch.flatten(x, 1)
+        x = self.regressor(x)
+        return x
+
+    @staticmethod
+    def is_valid(
+            freq_num: int,
+            frame_num: int,
+            kernel_size: int | list[int],
+            dilation_size: int | list[int],
+            layer_num: int,
+            inter_ch: int | list[int],
+            pool_size: int | list[int],
+            channel_num: int,
+            out_features: int
+    ):
+        if not isinstance(kernel_size, list):
+            kernel_size = [kernel_size] * layer_num
+        elif len(kernel_size) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as kernel_size.')
+            return False
+        if not isinstance(dilation_size, list):
+            dilation_size = [dilation_size] * layer_num
+        elif len(dilation_size) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as dilation_size.')
+            return False
+        if not isinstance(inter_ch, list):
+            inter_ch = [inter_ch] * layer_num
+        elif len(inter_ch) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as inter_ch.')
+            return False
+        if not isinstance(pool_size, list):
+            pool_size = [pool_size] * layer_num
+        elif len(pool_size) != layer_num:
+            logger.warning(f'Input List[int] with {layer_num} as pool_size.')
+            return False
+
+        model_params = {
+            'freq_num': freq_num,
+            'frame_num': frame_num,
+            'kernel_size': kernel_size,
+            'dilation_size': dilation_size,
+            'layer_num': layer_num,
+            'inter_ch': inter_ch,
+            'pool_size': pool_size
+        }
+        reg_time = frame_num
+        ok_layer_num = 0
+        for l in range(layer_num):
+            reg_time = reg_time - dilation_size[l] * (kernel_size[l] - 1)
+            reg_time = int(reg_time / pool_size[l])
+            if reg_time > 0:
+                ok_layer_num = l
+        if reg_time < 1:
+            logger.warning(f'Invalid model parameters, {model_params}. You should input {ok_layer_num + 1} as `layer_num` maybe.')
+            return False
+        return True
+
+
 """
 from model.cnn_model import *
 batch_size = 32
 freq_num = 64
-frame_num = 500
+frame_num = 501
 
 layer_num = 3
 task_num = 5
