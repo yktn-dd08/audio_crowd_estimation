@@ -1,0 +1,129 @@
+{
+    "roi_shp": "./data/gis/atc/roi/atc_roi03.shp",
+    "mic_shp": "./data/gis/atc/mic/atc_mic01.shp",
+    "snr": null,
+    "height": 3.0,
+    "max_orders": 0,
+    "task_list": {
+        "asphalt/train/roi3_crowd1024_09": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_09.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_09",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_10": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_10.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_10",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_11": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_11.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_11",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_12": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_12.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_12",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_13": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_13.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_13",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_14": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_14.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_14",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_15": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_15.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_15",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_16": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_16.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_16",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_17": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_17.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_17",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_18": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_18.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_18",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_19": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_19.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_19",
+            "params": {}
+        },
+        "asphalt/train/roi3_crowd1024_20": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/train/roi3_crowd1024_20.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/train/roi3_crowd1024_20",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_09": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_09.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_09",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_10": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_10.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_10",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_11": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_11.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_11",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_12": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_12.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_12",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_13": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_13.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_13",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_14": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_14.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_14",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_15": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_15.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_15",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_16": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_16.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_16",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_17": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_17.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_17",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_18": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_18.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_18",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_19": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_19.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_19",
+            "params": {}
+        },
+        "asphalt/test/roi3_crowd1031_20": {
+            "crowd_csv": "./data/gis/atc/crowd/asphalt/test/roi3_crowd1031_20.csv",
+            "output_folder": "./workspace/sim/atc/monaural/asphalt/test/roi3_crowd1031_20",
+            "params": {}
+        }
+    }
+}

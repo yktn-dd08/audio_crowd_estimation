@@ -7,8 +7,7 @@
             "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_13",
             "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_14",
             "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_15",
-            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_16",
-            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_17"
+            "./workspace/sim/atc/multi_channel/asphalt/train/roi1_crowd1024_16"
         ],
         "valid_folder_list": [
             "./workspace/sim/atc/multi_channel/asphalt/test/roi1_crowd1031_14"
@@ -49,7 +48,7 @@
             "weight_decay": 0.0,
             "criterion": "MAE"
         },
-        "epoch": 50,
+        "epoch": 20,
         "log_scale": true,
         "time_agg": true
     }

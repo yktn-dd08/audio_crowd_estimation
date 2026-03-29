@@ -20,7 +20,8 @@ from model.cnn_model import *
 from model.transformer import *
 from model.vggish_model import *
 from model.base_model import *
-from torchaudio.prototype.pipelines import VGGISH
+# from torchaudio.prototype.pipelines import VGGISH
+from model.vggish_compat import VGGISH
 from common.logger import get_logger
 from analysis.model_common import *
 
@@ -101,6 +102,22 @@ def read_crowd(input_folder, channel_num=1) -> list:
 
 
 def read_grid_crowd(input_folder, x_idx_range=None, y_idx_range=None) -> dict:
+    """
+    グリッドごとの人流データの読み込み
+    Parameters
+    ----------
+    input_folder: str
+        解析用データのフォルダパス
+    x_idx_range: tuple of int | None
+        人流データのx方向インデックス範囲（(min, max)）、Noneの場合は全範囲
+    y_idx_range: tuple of int | None
+        人流データのy方向インデックス範囲（(min, max)）、Noneの場合は全範囲
+
+    Returns
+    -------
+    result: dict
+        keyはグリッド座標に対応(ex. count_x0_y0)、valueは人数の時系列データ
+    """
     with open(f'{input_folder}/signal_info.json') as fp:
         signal_info = json.load(fp)
     crowd_path = signal_info['crowd_path']
@@ -112,7 +129,8 @@ def read_grid_crowd(input_folder, x_idx_range=None, y_idx_range=None) -> dict:
     piv_df = pd.pivot_table(df, index='t', columns=['x_idx', 'y_idx'], values='count', fill_value=0)
     piv_df.columns = [f'count_x{col[0]}_y{col[1]}' for col in piv_df.columns]
     piv_df = piv_df.reset_index(drop=True)
-    return {col: piv_df[col].tolist() for col in piv_df.columns}
+    result = {col: piv_df[col].tolist() for col in piv_df.columns}
+    return result
 
 
 def calc_other_task(crowd, task_name):
@@ -131,47 +149,138 @@ def calc_other_task(crowd, task_name):
         Exception(f'task_name should be `range_a-b` which means number of crowds with the distance a - b.')
 
 
-def read_logmel_torch(input_folder, target=None, tasks=None,
-                      channel_num=1, time_sec=1, log_scale=True, time_agg=False):
+def read_logmel_torch(
+        input_folder,
+        target=None,
+        tasks=None,
+        channel_num=1,
+        time_sec=1,
+        log_scale=True,
+        time_agg=False,
+        astype_torch=True
+):
+    """
+    入力フォルダの音響信号を読み込み、対数メルスペクトログラムと人流データをセットで返す
+
+    Parameters
+    ----------
+    input_folder: str
+        解析用データのフォルダパス
+    target: list[str]
+        目的変数のカラム名リスト（例: ['count']、['distance_1', 'distance_2']など）
+    tasks: list[str]
+        マルチタスク学習用のタスク名リスト（例: ['range_0-1', 'range_1-2']など）
+    channel_num: int
+        読み込むチャンネル数(モノラル限定)
+    time_sec: int
+        1つのサンプルに含める時間長（秒）
+    log_scale: bool
+        目的変数を対数変換するかどうか
+    time_agg: bool
+        目的変数を時間平均値にするかどうか
+    astype_torch: bool
+        特徴量と目的変数をtorch.Tensorで返すかどうか
+
+    Returns
+    -------
+    x : torch.Tensor or np.ndarray
+        抽出したlogmel特徴量、shape: (time_length, feature_dim, time_frame)
+    y : torch.Tensor or np.ndarray
+        抽出した人流データ、shape: (time_length, target_num)
+    task : torch.Tensor or np.ndarray (optional)
+        マルチタスク学習用のタスクデータ、shape: (time_length, task_num)
+    """
     if target is None:
         target = ['count']
     assert channel_num == 1, 'Can input only single channel signal.'
+
+    # wavファイル読み込み
     signal = read_wav(input_folder=input_folder, channel_num=channel_num)[0]
+
+    # 人流カウントデータを読み込み
     crowd = read_crowd(input_folder=input_folder, channel_num=channel_num)[0]
+
+    # もし目的変数カラムが存在しない場合は計算
+    # （ただし人流カウントデータから計算できる場合に限る: distance_1-2みたいなカラム等）
     for tg in target:
         if tg not in crowd.keys():
             crowd[tg] = calc_other_task(crowd=crowd, task_name=tg)
+
+    # マルチタスク学習用のデータを計算
     if tasks is not None:
         for task in tasks:
             if task not in crowd.keys():
                 crowd[task] = calc_other_task(crowd=crowd, task_name=task)
     time_length = min(int(len(signal) / FS), len(crowd[target[0]]))
-    x = [trans_logmel(signal[FS * (t+1-time_sec):FS * (t + 1)], FS) for t in range(time_sec - 1,time_length)]
-    x = torch.stack(x)
-    y_np = np.array([crowd[tg][time_sec-1:time_length] for tg in target]).T
-    if time_agg:
-        y_np = np.array([[sum(crowd[tg][t + 1 - time_sec:t + 1]) / time_sec for t in range(time_sec - 1, time_length)]
-                         for tg in target]).T
-    if log_scale:
-        y_np = np.log(y_np + 1.0)
-    y = torch.Tensor(y_np)
 
+    # 対数メルスペクトログラム（特徴量）を計算
+    x = [
+        trans_logmel(signal[FS * (t + 1 - time_sec) : FS * (t + 1)], FS, astype_torch)
+        for t in range(time_sec - 1, time_length)
+    ]
+    # torch or numpyで特徴量をxに格納
+    x = torch.stack(x) if astype_torch else np.stack(x)
+
+    # カウント値をyに格納
+    y = np.array([crowd[tg][time_sec-1:time_length] for tg in target]).T
+
+    # 目的変数を時間集約する場合
+    if time_agg:
+        y = np.array(
+            [
+                [
+                    sum(crowd[tg][t + 1 - time_sec : t + 1]) / time_sec
+                    for t in range(time_sec - 1, time_length)
+                ]
+                for tg in target
+            ]
+        ).T
+    # 目的変数を対数化する場合
+    if log_scale:
+        y = np.log(y + 1.0)
+
+    # torch型で出力する場合
+    if astype_torch:
+        y = torch.Tensor(y)
+
+    # マルチタスク学習する場合
     if tasks is not None:
-        task_np = np.array([crowd[ts][time_sec-1:time_length] for ts in tasks]).T
+        task = np.array(
+            [
+                crowd[ts][time_sec - 1 : time_length]
+                for ts in tasks
+            ]
+        ).T
         if time_agg:
-            task_np = np.array([[sum(crowd[ts][t + 1 - time_sec:t + 1]) / time_sec
-                                 for t in range(time_sec - 1, time_length)]
-                                for ts in tasks]).T
+            task = np.array(
+                [
+                    [
+                        sum(crowd[ts][t + 1 - time_sec : t + 1]) / time_sec
+                        for t in range(time_sec - 1, time_length)
+                    ]
+                    for ts in tasks
+                ]
+            ).T
         if log_scale:
-            task_np = np.log(task_np + 1.0)
-        task = torch.Tensor(task_np)
+            task = np.log(task + 1.0)
+        if astype_torch:
+            task = torch.Tensor(task)
         return x, y, task
     else:
         return x, y
 
 
-def read_logmel_multichannel(input_folder, channel_num, x_idx_range=None, y_idx_range=None,
-                             option='torch', time_sec=1, log_scale=True, time_agg=True):
+def read_logmel_multichannel(
+        input_folder,
+        channel_num,
+        x_idx_range=None,
+        y_idx_range=None,
+        option='torch',
+        time_sec=1,
+        log_scale=True,
+        time_agg=True,
+        astype_torch=True
+):
     """
     入力フォルダ内に含まれる音響信号群と人流データを読み込み、対数メルスペクトログラムと人流ヒートマップを返す（マルチチャンネル用）
     Parameters
@@ -192,6 +301,8 @@ def read_logmel_multichannel(input_folder, channel_num, x_idx_range=None, y_idx_
         目的変数を対数変換するかどうか
     time_agg : bool
         目的変数を時間平均値にするかどうか
+    astype_torch: bool
+        特徴量と目的変数をtorch.Tensorで返すかどうか
 
     Returns
     -------
@@ -221,12 +332,12 @@ def read_logmel_multichannel(input_folder, channel_num, x_idx_range=None, y_idx_
     if option == 'torch':
         x = [
             [
-                trans_logmel(signal[FS * (t + 1 - time_sec):FS * (t + 1)], FS)
+                trans_logmel(signal[FS * (t + 1 - time_sec) : FS * (t + 1)], FS, astype_torch)
                 for t in range(time_sec - 1,time_length)
             ]
             for signal in signal_list
         ]
-        x = torch.stack([torch.stack(xx) for xx in x])
+        x = torch.stack([torch.stack(xx) for xx in x]) if astype_torch else np.stack([np.stack(xx) for xx in x])
     elif option == 'VGGish':
         logmel_func = VGGISH.get_input_processor()
         x = [
@@ -237,6 +348,8 @@ def read_logmel_multichannel(input_folder, channel_num, x_idx_range=None, y_idx_
             for signal in signal_list
         ]
         x = torch.stack([torch.stack(xx) for xx in x])
+        if not astype_torch:
+            x = x.to('cpu').detach().numpy()
     elif option == 'AST':
         raise Exception('Not implemented yet.')
 
@@ -250,19 +363,21 @@ def read_logmel_multichannel(input_folder, channel_num, x_idx_range=None, y_idx_
                     for yi in range(y_idx_range[0], y_idx_range[1]+1)]
     if time_agg:
         # 時間平均値を目的変数とする場合
-        y_np = np.array([[sum(crowd_grid[cnt][t + 1 - time_sec:t + 1]) / time_sec
+        y = np.array([[sum(crowd_grid[cnt][t + 1 - time_sec:t + 1]) / time_sec
                           for t in range(time_sec - 1, time_length)]
                          for cnt in col_list]).T
     else:
         # 時間ごとの値を目的変数とする場合
-        y_np = np.array([crowd_grid[cnt][time_sec - 1:time_length] for cnt in col_list]).T
+        y = np.array([crowd_grid[cnt][time_sec - 1:time_length] for cnt in col_list]).T
 
     if log_scale:
         # 対数変換
-        y_np = np.log(y_np + 1.0)
+        y = np.log(y + 1.0)
 
-    y = torch.Tensor(y_np)
-    return x.transpose(0, 1), y, col_list
+    if astype_torch:
+        y = torch.Tensor(y)
+        x = x.transpose(0, 1)
+    return x, y, col_list
 
 
 def read_logmel_torch_ast(input_folder, model_param, target=None, tasks=None,
@@ -415,6 +530,7 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
     学習用データと検証用データ
     """
     x, y, task = None, None, None
+    x_list, y_list, task_list = [], [], []
     for i, input_folder in enumerate(input_folder_list):
         logger.info(f'Reading Training Folders: {input_folder}')
 
@@ -429,8 +545,10 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                 log_scale=log_scale,
                 model_param=model_param
             )
-            x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-            y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+            x_list.append(tmp_x)
+            y_list.append(tmp_y)
+            # x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+            # y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
 
         else:
             tmp_x, tmp_y, tmp_task = read_logmel(
@@ -443,9 +561,17 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                 time_agg=time_agg,
                 log_scale=log_scale
             )
-            x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-            y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
-            task = tmp_task if i == 0 else torch.cat([task, tmp_task], dim=0)
+            x_list.append(tmp_x)
+            y_list.append(tmp_y)
+            task_list.append(tmp_task)
+            # x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+            # y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+            # task = tmp_task if i == 0 else torch.cat([task, tmp_task], dim=0)
+
+    x = torch.cat(x_list, dim=0)
+    y = torch.cat(y_list, dim=0)
+    if tasks is not None:
+        task = torch.cat(task_list, dim=0)
 
     # 検証用のデータがいらない場合 (予測のみ行う場合)
     if not valid_flag:
@@ -455,7 +581,7 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
             return x, y, task
 
     valid_x, valid_y, valid_task = None, None, None
-
+    valid_x_list, valid_y_list, valid_task_list = [], [], []
     # valid_folder_listがNoneの時はinput_folder_listのデータをランダムで学習用、評価用に分割する
     if valid_folder_list is None:
         tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
@@ -480,8 +606,10 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                     time_agg=time_agg,
                     model_param=model_param
                 )
-                valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-                valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+                valid_x_list.append(tmp_x)
+                valid_y_list.append(tmp_y)
+                # valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+                # valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
 
             else:
                 tmp_x, tmp_y, tmp_task = read_logmel(
@@ -493,9 +621,17 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                     time_sec=model_param['time_sec'],
                     time_agg=time_agg
                 )
-                valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-                valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
-                valid_task = tmp_task if i == 0 else torch.cat([valid_task, tmp_task], dim=0)
+                valid_x_list.append(tmp_x)
+                valid_y_list.append(tmp_y)
+                valid_task_list.append(tmp_task)
+                # valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+                # valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+                # valid_task = tmp_task if i == 0 else torch.cat([valid_task, tmp_task], dim=0)
+
+        valid_x = torch.cat(valid_x_list, dim=0)
+        valid_y = torch.cat(valid_y_list, dim=0)
+        if tasks is not None:
+            valid_task = torch.cat(valid_task_list, dim=0)
 
     if tasks is None:
         return (x, y), (valid_x, valid_y)
@@ -509,8 +645,10 @@ def load_dataset_multichannel(input_folder_list, valid_folder_list, model_name, 
     # TODO AST未対応
     option = 'VGGish' if 'VGGish' in model_name else 'torch'
 
-    x, y, col_list = None, None, None
+    # x, y, col_list = None, None, None
+    col_list = None
     # input_folder_listのデータを読み込み
+    x_list, y_list = [], []
     for i, input_folder in enumerate(input_folder_list):
         logger.info(f'Reading Training Folders: {input_folder}')
         tmp_x, tmp_y, col_list = read_logmel_multichannel(
@@ -523,14 +661,17 @@ def load_dataset_multichannel(input_folder_list, valid_folder_list, model_name, 
             time_agg=time_agg,
             log_scale=log_scale
         )
-        x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
-        y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
+        x_list.append(tmp_x)
+        y_list.append(tmp_y)
+        # x = tmp_x if i == 0 else torch.cat([x, tmp_x], dim=0)
+        # y = tmp_y if i == 0 else torch.cat([y, tmp_y], dim=0)
 
+    x = torch.cat(x_list, dim=0)
+    y = torch.cat(y_list, dim=0)
     if not valid_flag:
         return (x, y), col_list
 
-    valid_x, valid_y = None, None
-
+    # valid_x, valid_y = None, None
     # valid_folder_listがNoneの時はinput_folder_listのデータをランダムで学習用、評価用に分割する
     if valid_folder_list is None:
         tr_idx, ts_idx = train_test_split(range(len(y)), test_size=0.2, random_state=0)
@@ -538,6 +679,7 @@ def load_dataset_multichannel(input_folder_list, valid_folder_list, model_name, 
         x, y = x[tr_idx], y[tr_idx]
 
     else:
+        valid_x_list, valid_y_list = [], []
         for i, valid_folder in enumerate(valid_folder_list):
             logger.info(f'Reading Valid Folders: {valid_folder}')
 
@@ -551,8 +693,12 @@ def load_dataset_multichannel(input_folder_list, valid_folder_list, model_name, 
                 time_agg=time_agg,
                 log_scale=log_scale
             )
-            valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
-            valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+            valid_x_list.append(tmp_x)
+            valid_y_list.append(tmp_y)
+            # valid_x = tmp_x if i == 0 else torch.cat([valid_x, tmp_x], dim=0)
+            # valid_y = tmp_y if i == 0 else torch.cat([valid_y, tmp_y], dim=0)
+        valid_x = torch.cat(valid_x_list, dim=0)
+        valid_y = torch.cat(valid_y_list, dim=0)
 
     return (x, y), (valid_x, valid_y), col_list
 
@@ -933,14 +1079,18 @@ def audio_crowd_training_multichannel(
     test_dataset = torch.utils.data.TensorDataset(valid_x, valid_y)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
+    # サンプル重みの計算インスタンス
+    swc = SampleWeightCalculator(y=y, dev=device, alpha=0.1)
 
     model, optimizer, criterion = load_model_setting(model_name, model_param, len(col_list))
     model = model.to(device)
 
     train_loss, test_loss = [], []
     for ep in range(epoch):
-        tr_loss_tmp = model_train_wg(model, train_dataloader, criterion, optimizer, ep, device)
-        ts_loss_tmp = model_test_wg(model, test_dataloader, criterion, ep, device)
+        # tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep, device)
+        # ts_loss_tmp = model_test(model, test_dataloader, criterion, ep, device)
+        tr_loss_tmp = model_train_sw(model, train_dataloader, criterion, optimizer, ep, swc, device)
+        ts_loss_tmp = model_test_sw(model, test_dataloader, criterion, ep, swc, device)
         train_loss.append(tr_loss_tmp)
         test_loss.append(ts_loss_tmp)
 
@@ -949,11 +1099,11 @@ def audio_crowd_training_multichannel(
     view_loss(train_loss, test_loss, f'{model_folder}/loss.png')
     torch.save(model.state_dict(), f'{model_folder}/{model_name}_model.pt')
 
-    target_np, output_np = model_predict_wg(model, train_dataloader, dev)
+    target_np, output_np = model_predict(model, train_dataloader, dev)
     plot_result(model_folder, target_np, output_np, col_list, label='train', log_scale=log_scale)
     write_result(model_folder, target_np, output_np, col_list, label='train', log_scale=log_scale)
 
-    target_np, output_np = model_predict_wg(model, test_dataloader, dev)
+    target_np, output_np = model_predict(model, test_dataloader, dev)
     plot_result(model_folder, target_np, output_np, col_list, label='test', log_scale=log_scale)
     write_result(model_folder, target_np, output_np, col_list, label='test', log_scale=log_scale)
     return
@@ -1414,8 +1564,8 @@ def audio_crowd_tuning_multichannel(
 
         train_loss, test_loss = [], []
         for ep in range(epoch):
-            tr_loss_tmp = model_train_wg(model, train_dataloader, criterion, optimizer, ep, dev, verbose=True)
-            ts_loss_tmp = model_test_wg(model, test_dataloader, criterion, ep, dev, verbose=True)
+            tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep, dev, verbose=True)
+            ts_loss_tmp = model_test(model, test_dataloader, criterion, ep, dev, verbose=True)
             train_loss.append(tr_loss_tmp)
             test_loss.append(ts_loss_tmp)
 
@@ -1424,11 +1574,11 @@ def audio_crowd_tuning_multichannel(
             os.makedirs(each_folder, exist_ok=True)
         view_loss(train_loss, test_loss, f'{each_folder}/loss.png')
 
-        target_np, output_np = model_predict_wg(model, train_dataloader, dev, verbose=False)
+        target_np, output_np = model_predict(model, train_dataloader, dev, verbose=False)
         plot_result(each_folder, target_np, output_np, col_list, label='train', log_scale=log_scale)
         write_result(each_folder, target_np, output_np, col_list, label='train', log_scale=log_scale)
 
-        target_np, output_np = model_predict_wg(model, test_dataloader, dev, verbose=False)
+        target_np, output_np = model_predict(model, test_dataloader, dev, verbose=False)
         plot_result(each_folder, target_np, output_np, col_list, label='test', log_scale=log_scale)
         write_result(each_folder, target_np, output_np, col_list, label='test', log_scale=log_scale)
 

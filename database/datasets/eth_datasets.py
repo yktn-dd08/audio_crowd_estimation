@@ -90,6 +90,7 @@ def interpolate_people_flow_df(df: pd.DataFrame, dt=0.1):
     ----------
     df: pd.DataFrame
         人流データのDataFrame
+        columns: [t, pid, x, y]
     dt: float
         補間後のdelta_t[s]
 

@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 
-from torchaudio.prototype.pipelines import VGGISH
+# from torchaudio.prototype.pipelines import VGGISH
+from model.vggish_compat import VGGISH
 from torch.nn import TransformerEncoder, TransformerEncoderLayer, Transformer
 from torch.nn import Linear
 
