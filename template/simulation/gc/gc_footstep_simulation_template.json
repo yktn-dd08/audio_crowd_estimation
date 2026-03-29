@@ -3,28 +3,12 @@
     "mic_shp": "./data/gis/gc/mic/gc_mic01.shp",
     "height": 3.0,
     "task_list": {
-        "asphalt/train/roi1_crowd0620_09": {
-            "crowd_csv": "./data/gis/gc/crowd/asphalt/train/roi1_crowd0620_09.csv",
-            "output_folder": "./workspace/sim/gc/monaural/asphalt/train/roi1_crowd0620_09",
-            "params": {
-                "snr": null,
-                "max_orders": 0
-            }
-        },
-        "asphalt/train/snr10_roi1_crowd0620_09": {
-            "crowd_csv": "./data/gis/gc/crowd/asphalt/train/roi1_crowd0620_09.csv",
-            "output_folder": "./workspace/sim/gc/monaural/asphalt/train/snr10_roi1_crowd0620_09",
-            "params": {
-                "snr": 10,
-                "max_orders": 0
-            }
-        },
         "asphalt/train/reverb5_roi1_crowd0620_09": {
             "crowd_csv": "./data/gis/gc/crowd/asphalt/train/roi1_crowd0620_09.csv",
             "output_folder": "./workspace/sim/gc/monaural/asphalt/train/reverb5_roi1_crowd0620_09",
             "params": {
                 "snr": null,
-                "max_orders": 5
+                "max_order": 5
             }
         },
         "asphalt/train/reverb5_snr10_roi1_crowd0620_09": {
@@ -32,7 +16,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/train/reverb5_snr10_roi1_crowd0620_09",
             "params": {
                 "snr": 10,
-                "max_orders": 5
+                "max_order": 5
             }
         },
         "asphalt/train/roi1_crowd0620_10": {
@@ -40,7 +24,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/train/roi1_crowd0620_10",
             "params": {
                 "snr": null,
-                "max_orders": 0
+                "max_order": 0
             }
         },
         "asphalt/train/snr10_roi1_crowd0620_10": {
@@ -48,7 +32,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/train/snr10_roi1_crowd0620_10",
             "params": {
                 "snr": 10,
-                "max_orders": 0
+                "max_order": 0
             }
         },
         "asphalt/train/reverb5_roi1_crowd0620_10": {
@@ -56,7 +40,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/train/reverb5_roi1_crowd0620_10",
             "params": {
                 "snr": null,
-                "max_orders": 5
+                "max_order": 5
             }
         },
         "asphalt/train/reverb5_snr10_roi1_crowd0620_10": {
@@ -64,7 +48,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/train/reverb5_snr10_roi1_crowd0620_10",
             "params": {
                 "snr": 10,
-                "max_orders": 5
+                "max_order": 5
             }
         },
         "asphalt/test/roi1_crowd0620_09": {
@@ -72,7 +56,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/roi1_crowd0620_09",
             "params": {
                 "snr": null,
-                "max_orders": 0
+                "max_order": 0
             }
         },
         "asphalt/test/snr10_roi1_crowd0620_09": {
@@ -80,7 +64,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/snr10_roi1_crowd0620_09",
             "params": {
                 "snr": 10,
-                "max_orders": 0
+                "max_order": 0
             }
         },
         "asphalt/test/reverb5_roi1_crowd0620_09": {
@@ -88,7 +72,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/reverb5_roi1_crowd0620_09",
             "params": {
                 "snr": null,
-                "max_orders": 5
+                "max_order": 5
             }
         },
         "asphalt/test/reverb5_snr10_roi1_crowd0620_09": {
@@ -96,7 +80,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/reverb5_snr10_roi1_crowd0620_09",
             "params": {
                 "snr": 10,
-                "max_orders": 5
+                "max_order": 5
             }
         },
         "asphalt/test/roi1_crowd0620_10": {
@@ -104,7 +88,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/roi1_crowd0620_10",
             "params": {
                 "snr": null,
-                "max_orders": 0
+                "max_order": 0
             }
         },
         "asphalt/test/snr10_roi1_crowd0620_10": {
@@ -112,7 +96,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/snr10_roi1_crowd0620_10",
             "params": {
                 "snr": 10,
-                "max_orders": 0
+                "max_order": 0
             }
         },
         "asphalt/test/reverb5_roi1_crowd0620_10": {
@@ -120,7 +104,7 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/reverb5_roi1_crowd0620_10",
             "params": {
                 "snr": null,
-                "max_orders": 5
+                "max_order": 5
             }
         },
         "asphalt/test/reverb5_snr10_roi1_crowd0620_10": {
@@ -128,7 +112,23 @@
             "output_folder": "./workspace/sim/gc/monaural/asphalt/test/reverb5_snr10_roi1_crowd0620_10",
             "params": {
                 "snr": 10,
-                "max_orders": 5
+                "max_order": 5
+            }
+        },
+        "asphalt/train/roi1_crowd0620_09": {
+            "crowd_csv": "./data/gis/gc/crowd/asphalt/train/roi1_crowd0620_09.csv",
+            "output_folder": "./workspace/sim/gc/monaural/asphalt/train/roi1_crowd0620_09",
+            "params": {
+                "snr": null,
+                "max_order": 0
+            }
+        },
+        "asphalt/train/snr10_roi1_crowd0620_09": {
+            "crowd_csv": "./data/gis/gc/crowd/asphalt/train/roi1_crowd0620_09.csv",
+            "output_folder": "./workspace/sim/gc/monaural/asphalt/train/snr10_roi1_crowd0620_09",
+            "params": {
+                "snr": 10,
+                "max_order": 0
             }
         }
     }
