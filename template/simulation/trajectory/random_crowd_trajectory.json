@@ -1,0 +1,112 @@
+{
+    "option": "crowd_trajectory",
+    "param": {
+        "person_num": 500,
+        "start_time": 0,
+        "end_time": 3600,
+        "existing_time": 140,
+        "existing_time_sigma": 100,
+        "v_sigma": 0.3,
+        "datetime_str": "2024-01-01 00:00:00",
+        "v": 1.0,
+        "dir_division": 8
+    },
+    "task_list": {
+        "random_crowd0101_00": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_00.csv",
+            "datetime_str": "2024-01-01 00:00:00",
+            "v": 1.0,
+            "dir_division": 8
+        },
+        "random_crowd0101_01": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_01.csv",
+            "datetime_str": "2024-01-01 01:00:00",
+            "v": 1.2,
+            "dir_division": 8
+        },
+        "random_crowd0101_02": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_02.csv",
+            "datetime_str": "2024-01-01 02:00:00",
+            "v": 1.4,
+            "dir_division": 8
+        },
+        "random_crowd0101_03": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_03.csv",
+            "datetime_str": "2024-01-01 03:00:00",
+            "v": 1.6,
+            "dir_division": 8
+        },
+        "random_crowd0101_04": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_04.csv",
+            "datetime_str": "2024-01-01 04:00:00",
+            "v": 1.0,
+            "dir_division": 4
+        },
+        "random_crowd0101_05": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_05.csv",
+            "datetime_str": "2024-01-01 05:00:00",
+            "v": 1.2,
+            "dir_division": 4
+        },
+        "random_crowd0101_06": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_06.csv",
+            "datetime_str": "2024-01-01 06:00:00",
+            "v": 1.4,
+            "dir_division": 4
+        },
+        "random_crowd0101_07": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_07.csv",
+            "datetime_str": "2024-01-01 07:00:00",
+            "v": 1.6,
+            "dir_division": 4
+        },
+        "random_crowd0101_08": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_08.csv",
+            "datetime_str": "2024-01-01 08:00:00",
+            "v": 1.0,
+            "dir_division": 2
+        },
+        "random_crowd0101_09": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_09.csv",
+            "datetime_str": "2024-01-01 09:00:00",
+            "v": 1.2,
+            "dir_division": 2
+        },
+        "random_crowd0101_10": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_10.csv",
+            "datetime_str": "2024-01-01 10:00:00",
+            "v": 1.4,
+            "dir_division": 2
+        },
+        "random_crowd0101_11": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_11.csv",
+            "datetime_str": "2024-01-01 11:00:00",
+            "v": 1.6,
+            "dir_division": 2
+        },
+        "random_crowd0101_12": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_12.csv",
+            "datetime_str": "2024-01-01 12:00:00",
+            "v": 1.0,
+            "dir_division": 1
+        },
+        "random_crowd0101_13": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_13.csv",
+            "datetime_str": "2024-01-01 13:00:00",
+            "v": 1.2,
+            "dir_division": 1
+        },
+        "random_crowd0101_14": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_14.csv",
+            "datetime_str": "2024-01-01 14:00:00",
+            "v": 1.4,
+            "dir_division": 1
+        },
+        "random_crowd0101_15": {
+            "output_csv": "./data/gis/random/crowd/org/roi1_random_crowd0101_15.csv",
+            "datetime_str": "2024-01-01 15:00:00",
+            "v": 1.6,
+            "dir_division": 1
+        }
+    }
+}

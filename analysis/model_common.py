@@ -570,6 +570,8 @@ def write_result(folder, target_np, output_np, target, label, log_scale):
     for t in target:
         calculate_accuracy(target_df[f'target_{t}'].values, output_df[f'predict_{t}'].values,
                            f'{folder}/{label}_acc_{t}.json')
+    calculate_accuracy(target_df.values.flatten(), output_df.values.flatten(),
+                       f'{folder}/{label}_acc_all.json')
     return
 
 
@@ -603,4 +605,5 @@ def plot_result(folder, target_np, output_np, target: list, label, log_scale):
         output_np = np.exp(output_np) - 1
     for i, t in enumerate(target):
         scatter_plot(target_np[:, i], output_np[:, i], f'{folder}/{label}_scatter_{t}.png')
+    scatter_plot(target_np.flatten(), output_np.flatten(), f'{folder}/{label}_scatter_all.png')
     return

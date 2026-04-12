@@ -15,6 +15,7 @@
         ],
         "model_folder": "./workspace/model/optuna/asphalt/multi_channel/atc_MultiChannelSimpleCNN_f5_d3",
         "model_name": "MultiChannelSimpleCNN",
+        "n_trials": 500,
         "batch_size": 64,
         "model_param": {
             "time_sec": 5,
@@ -37,12 +38,7 @@
                 "high": 11,
                 "low": 1
             },
-            "inter_ch": {
-                "type": "list[int]",
-                "size": "layer_num",
-                "high": 16,
-                "low": 2
-            },
+            "inter_ch": 64,
             "pool_size": {
                 "type": "list[int]",
                 "size": "layer_num",

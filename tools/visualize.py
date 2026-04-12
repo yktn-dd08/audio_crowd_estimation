@@ -1,15 +1,42 @@
+import subprocess
 import os.path
 
 import librosa
 import pandas as pd
-from librosa.feature import melspectrogram
+# from librosa.feature import melspectrogram
 import matplotlib.pyplot as plt
 import argparse
 import numpy as np
 import scipy as sp
+import cv2
 from scipy.io import wavfile
 
 FS = 16000
+
+
+def change_speed_ffmpeg(input_path, output_path, speed=2.0):
+    if speed <= 0:
+        raise ValueError("speed must be > 0")
+
+    cap = cv2.VideoCapture(input_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+
+    if fps <= 0:
+        raise ValueError("Failed to read input FPS")
+
+    out_fps = fps * speed
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", input_path,
+        "-filter:v", f"setpts=PTS/{speed}",
+        "-r", str(out_fps),
+        "-an",
+        output_path
+    ]
+    subprocess.run(cmd, check=True)
 
 
 def save_logmel_spec(wav_file, img_file):
@@ -18,14 +45,16 @@ def save_logmel_spec(wav_file, img_file):
         signal = signal.mean(axis=1)
     if fs != FS:
         signal = librosa.resample(y=signal.astype(float), orig_sr=fs, target_sr=FS)
-    mel = melspectrogram(y=signal, sr=FS)
-    fig, ax = plt.subplots()
-    a = ax.imshow(np.log10(mel), cmap='rainbow')
-    ax.invert_yaxis()
-    fig.colorbar(a, ax=ax, label='Intensity[dB]')
-    plt.savefig(img_file)
-    plt.close()
-    return
+    raise NotImplemented('save_logmel_spec is not implemented yet')
+    # TODO pytorchに移行してmelspectrogramを実装
+    # mel = melspectrogram(y=signal, sr=FS)
+    # fig, ax = plt.subplots()
+    # a = ax.imshow(np.log10(mel), cmap='rainbow')
+    # ax.invert_yaxis()
+    # fig.colorbar(a, ax=ax, label='Intensity[dB]')
+    # plt.savefig(img_file)
+    # plt.close()
+    # return
 
 
 def save_logmel_spec2(wav_file, img_file):
@@ -36,20 +65,21 @@ def save_logmel_spec2(wav_file, img_file):
         signal = librosa.resample(y=signal.astype(float), orig_sr=fs, target_sr=FS)
     folder = os.path.dirname(img_file)
     os.makedirs(folder, exist_ok=True)
-    mel = melspectrogram(y=signal.astype(float), sr=FS) + 1.0e-20
-    plt.figure(figsize=(18, 6))
-    librosa.display.specshow(librosa.power_to_db(mel, ref=np.max), x_axis='time', y_axis='mel', sr=FS,
-                             cmap='rainbow')
-    cbar = plt.colorbar(format='%+2.0f dB')
-    cbar.ax.tick_params(labelsize=16)
-    plt.title('Mel Spectrogram', fontsize=24)
-    plt.xlabel('Time [s]', fontsize=20)
-    plt.ylabel('Frequency [Hz]', fontsize=20)
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
-    plt.tight_layout()
-    plt.savefig(img_file)
-    plt.close()
+    # TODO pytorchに移行してmelspectrogramを実装
+    # mel = melspectrogram(y=signal.astype(float), sr=FS) + 1.0e-20
+    # plt.figure(figsize=(18, 6))
+    # librosa.display.specshow(librosa.power_to_db(mel, ref=np.max), x_axis='time', y_axis='mel', sr=FS,
+    #                          cmap='rainbow')
+    # cbar = plt.colorbar(format='%+2.0f dB')
+    # cbar.ax.tick_params(labelsize=16)
+    # plt.title('Mel Spectrogram', fontsize=24)
+    # plt.xlabel('Time [s]', fontsize=20)
+    # plt.ylabel('Frequency [Hz]', fontsize=20)
+    # plt.xticks(fontsize=16)
+    # plt.yticks(fontsize=16)
+    # plt.tight_layout()
+    # plt.savefig(img_file)
+    # plt.close()
     return
 
 

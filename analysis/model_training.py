@@ -27,8 +27,19 @@ from analysis.model_common import *
 
 
 FS = 16000
-MODEL_LIST = ['VGGishLinear', 'VGGishTransformer', 'SimpleCNN', 'SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2',
-              'ASTRegressor', 'Conv1dTransformer', 'LeastSquareModel', 'MultiChannelSimpleCNN']
+MODEL_LIST = [
+    'VGGishLinear',
+    'VGGishTransformer',
+    'SimpleCNN',
+    'SimpleCNN2',
+    'SimpleCNN3',
+    'AreaSpecificCNN',
+    'AreaSpecificCNN2',
+    'ASTRegressor',
+    'Conv1dTransformer',
+    'LeastSquareModel',
+    'MultiChannelSimpleCNN'
+]
 SAMPLER_LIST = ['random', 'tpe']
 LOSS_LIST = ['MAE', 'MSE']
 TASK_PATTERN = r'range_(\d+)-(\d+)'
@@ -916,7 +927,7 @@ def is_valid_model(model_name, model_param):
         モデルパラメタが妥当であればTrue、そうでなければFalse
     """
     assert model_name in MODEL_LIST, f'You can choose model: {MODEL_LIST}.'
-    if model_name in ['SimpleCNN2', 'AreaSpecificCNN', 'AreaSpecificCNN2', 'MultiChannelSimpleCNN']:
+    if model_name in ['SimpleCNN2', 'SimpleCNN3', 'AreaSpecificCNN', 'AreaSpecificCNN2', 'MultiChannelSimpleCNN']:
         func = eval(model_name)
         func_params = list(signature(func.is_valid).parameters.keys())
         setting_params = {k: model_param[k] for k in func_params if k in model_param.keys()}
@@ -1546,6 +1557,7 @@ def audio_crowd_tuning_multichannel(
     test_dataset = torch.utils.data.TensorDataset(valid_x, valid_y)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
+    swc = SampleWeightCalculator(y=y, dev=device, alpha=0.1)
 
     def objective(trial: optuna.Trial):
         model_param_optuna = trial_from_model_param_setting(trial, model_param)
@@ -1564,8 +1576,10 @@ def audio_crowd_tuning_multichannel(
 
         train_loss, test_loss = [], []
         for ep in range(epoch):
-            tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep, dev, verbose=True)
-            ts_loss_tmp = model_test(model, test_dataloader, criterion, ep, dev, verbose=True)
+            tr_loss_tmp = model_train_sw(model, train_dataloader, criterion, optimizer, ep, swc, device)
+            ts_loss_tmp = model_test_sw(model, test_dataloader, criterion, ep, swc, device)
+            # tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep, dev, verbose=True)
+            # ts_loss_tmp = model_test(model, test_dataloader, criterion, ep, dev, verbose=True)
             train_loss.append(tr_loss_tmp)
             test_loss.append(ts_loss_tmp)
 

@@ -12,7 +12,7 @@
         "valid_folder_list": [
             "./workspace/sim/atc/multi_channel/asphalt/test/roi1_crowd1031_14"
         ],
-        "model_folder": "./workspace/model/train/asphalt/multi_channel/atc_MultiChannelSimpleCNN_f5_d3",
+        "model_folder": "./workspace/model/train/asphalt/multi_channel/atc_MultiChannelSimpleCNN_f5_d3_epoch2000_v2",
         "model_name": "MultiChannelSimpleCNN",
         "batch_size": 64,
         "model_param": {
@@ -25,30 +25,30 @@
 
             "layer_num": 3,
             "kernel_size": [
-                9,
+                23,
                 23,
                 23
             ],
             "dilation_size": [
-                3,
+                1,
                 1,
                 1
             ],
             "inter_ch": [
-                16,
-                13,
-                12
+                64,
+                64,
+                64
             ],
             "pool_size": [
                 2,
                 1,
                 1
             ],
-            "lr": 0.00001,
+            "lr": 0.000001,
             "weight_decay": 0.0,
             "criterion": "MAE"
         },
-        "epoch": 20,
+        "epoch": 2000,
         "log_scale": true,
         "time_agg": true
     }

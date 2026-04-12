@@ -1,8 +1,12 @@
 import glob
 import json
 import os
+import math
 import random
 import argparse
+from datetime import datetime, timedelta
+from matplotlib.animation import FuncAnimation, FFMpegWriter
+
 import librosa
 import pandas as pd
 import torch
@@ -20,6 +24,8 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 from common.logger import get_logger
 from database.common import *
+from tools.visualize import change_speed_ffmpeg
+
 
 INPUT_DIR = './data/speech'
 OUTPUT_DIR = './output'
@@ -284,9 +290,15 @@ class Crowd:
     def __get_point_index_float(line: LineString, point: Point):
         """
         Nポイントで構成されるLineStringについて、内分点が何ポイント目に相当するか抽出
-        :param line:
-        :param point:
-        :return:
+        Parameters
+        ----------
+        line: LineString
+        point
+
+        Returns
+        -------
+        result: float
+
         """
         c = line.coords
         dist_parts = [0] + [Point(c[i]).distance(Point(c[i + 1])) for i in range(len(c) - 1)]
@@ -301,7 +313,8 @@ class Crowd:
 
         tmp_length = LineString([gc.geoms[0].coords[-2], gc.geoms[1].coords[1]]).length
         tmp_div = LineString([gc.geoms[0].coords[-2], point.coords[0]]).length
-        return len(gc.geoms[0].coords) - 2 + tmp_div / tmp_length
+        result = len(gc.geoms[0].coords) - 2 + tmp_div / tmp_length
+        return result
 
     def get_foot_points(self):
         """
@@ -863,6 +876,354 @@ for i in tqdm(range(len(crowd_sim.crowd_list))):
     trj_df = trj_df[['time_index'] + [f'distance_{d}' for d in distance_list]].set_index('time_index')
     out_df.loc[trj_df.index] += trj_df.loc[trj_df.index]
 """
+
+class PersonTrajectory:
+    def __init__(
+            self,
+            pid: int,
+            start_time: int | float,
+            end_time: int | float,
+            start_point: Point,
+            v: float = 1.0,
+            v_sigma: float = 0.0,
+            dir_sigma: float = None,
+            room_polygon: Polygon = None
+    ):
+        """
+        一人分の移動軌跡を生成するクラス
+        Parameters
+        ----------
+        pid: int
+            person id
+        start_time: int or float
+            person start time (second)
+        end_time: int or float
+            person end time (second)
+        start_point: Point
+            person start point
+        v: float
+            person speed (m/s)
+        v_sigma: float
+            standard deviation of speed
+        dir_sigma: float
+            standard deviation of direction (radian)
+        room_polygon: Polygon
+            simulation room polygon. If the generated point is outside of the room, it will be reflected
+        """
+        self.pid = pid
+        self.start_time = start_time
+        self.end_time = end_time
+        self.start_point = start_point
+        self.v = v
+        self.dir_sigma = math.pi / 8 if dir_sigma is None else dir_sigma
+        self.v_sigma = v_sigma
+        self.room_polygon = room_polygon
+        if self.room_polygon is not None and not self.room_polygon.contains(self.start_point):
+            # 開始点が部屋の外にある場合はpolygon内のランダムな点を開始点とする
+            minx, miny, maxx, maxy = self.room_polygon.bounds
+            while True:
+                random_point = Point(random.uniform(minx, maxx), random.uniform(miny, maxy))
+                if self.room_polygon.contains(random_point):
+                    self.start_point = random_point
+                    break
+        self.trajectory = None
+        return
+
+    def generate_trajectory(self, time_step=1.0):
+        current_point = self.start_point
+        current_dir = random.uniform(0, 2 * math.pi)
+        history = [(self.start_time, current_point, current_dir)]
+        for t in np.arange(self.start_time + time_step, self.end_time, time_step):
+            # 速度と方向にランダムノイズを加える
+            v_t = max(0.0, random.gauss(self.v, self.v_sigma))
+            dir_t = random.gauss(current_dir, self.dir_sigma)
+            # 次の点を計算する
+            new_x = current_point.x + v_t * time_step * math.cos(dir_t)
+            new_y = current_point.y + v_t * time_step * math.sin(dir_t)
+            new_point = Point(new_x, new_y)
+
+
+            if self.room_polygon is not None and not self.room_polygon.contains(new_point):
+                # 部屋の外に出ないように反射させる
+                line = LineString([current_point, new_point])
+                intersection = line.intersection(self.room_polygon.boundary)
+                if intersection.is_empty:
+                    # 交点がない場合は元の位置に留まる
+                    new_point = current_point
+                else:
+                    # 交点が複数ある場合は最も近い交点を選ぶ
+                    if isinstance(intersection, Point):
+                        nearest_intersection = intersection
+                    else:
+                        nearest_intersection = min(intersection.geoms, key=lambda p: current_point.distance(p))
+                    # 反射後の点を計算する
+                    reflect_dir = math.atan2(nearest_intersection.y - current_point.y,
+                                             nearest_intersection.x - current_point.x) + math.pi
+                    # v_t = v_t - nearest_intersection.distance(current_point) / time_step
+                    new_x = nearest_intersection.x + v_t * time_step * math.cos(reflect_dir)
+                    new_y = nearest_intersection.y + v_t * time_step * math.sin(reflect_dir)
+                    new_point = Point(new_x, new_y)
+                    # 反射後の点が部屋の外に出ないようにする
+                    if self.room_polygon is not None and not self.room_polygon.contains(new_point):
+                        new_point = nearest_intersection
+                    current_dir = math.atan2(new_point.y - current_point.y, new_point.x - current_point.x)
+            current_point = new_point
+            history.append((t, current_point, current_dir))
+        self.trajectory = LineString([h[1] for h in history])
+        return
+
+
+class CrowdTrajectory:
+    @staticmethod
+    def from_csv(csv_path):
+        # TODO 実装中
+        crowd_df = pd.read_csv(csv_path)
+        crowd_df['geom'] = crowd_df['geom'].apply(lambda x: wkt.loads(x))
+        crowd_traj = CrowdTrajectory()
+        crowd_traj.crowd_trj_df = crowd_df
+        logger.info(f'crowd trajectory loaded from {csv_path}')
+        return crowd_traj
+
+    def __init__(
+            self,
+            room_polygon: Polygon = None
+    ):
+        self.crowd_trj_df = None
+        self.person_trajectories = []
+        default_coords = ((-20, -20), (-20, 20), (20, 20), (20, -20), (-20, -20))
+        self.room_polygon = Polygon(default_coords) if room_polygon is None else room_polygon
+        return
+
+    def set_crowd_trajectory(
+            self,
+            person_num,
+            start_time,
+            end_time,
+            v=1.5,
+            v_sigma=0.3,
+            exist_time=60.0,
+            exist_time_sigma=0.0,
+            dir_division=8,
+            datetime_str='2024-01-01 00:00:00'
+    ):
+        for pid in range(person_num):
+            delta_time = max(int(exist_time + random.gauss(0, exist_time_sigma)), 1)
+            each_time = int(random.random() * (end_time - start_time) + start_time)
+            start_point = Point(random.uniform(self.room_polygon.bounds[0], self.room_polygon.bounds[2]),
+                                random.uniform(self.room_polygon.bounds[1], self.room_polygon.bounds[3]))
+            person_trajectory = PersonTrajectory(
+                pid=pid,
+                start_time=each_time,
+                end_time=each_time + delta_time,
+                start_point=start_point,
+                v=v+random.gauss(0, 0.1),
+                v_sigma=v_sigma,
+                dir_sigma=math.pi / dir_division,
+                room_polygon=self.room_polygon
+            )
+            self.person_trajectories.append(person_trajectory)
+        logger.info(f'set crowd setting - person num: {person_num}, time range: ({start_time}, {end_time}), v: {v}, exist_time: {exist_time}')
+
+        dt = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
+        trj_list = []
+        for pt in self.person_trajectories:
+            pt.generate_trajectory()
+            start_time = dt + timedelta(seconds=pt.start_time)
+            line_string = pt.trajectory
+            trj_list.append({'id': pt.pid, 'start_time': start_time, 'geom': line_string})
+        self.crowd_trj_df = pd.DataFrame(trj_list)
+        logger.info('crowd trajectory generated.')
+        return
+
+    def to_csv(self, filename):
+        assert self.crowd_trj_df is not None, 'No trajectory data to save. Please run set_crowd_trajectory() first.'
+        dir_name = os.path.dirname(filename)
+        os.makedirs(dir_name, exist_ok=True)
+        self.crowd_trj_df.to_csv(filename, index=False)
+        logger.info(f'crowd trajectory saved to {filename}')
+        # if shp_flag:
+        #     shp_name = f'{dir_name}/roi1_random.shp'
+        #     roi_df = pd.DataFrame({'id':0, 'geom': self.room_polygon})
+        #     gpd.GeoDataFrame(roi_df, geometry='geom').to_file(shp_name)
+        #     logger.info(f'room polygon saved to {shp_name}')
+        return
+
+    def create_video(self, filename, fps=1, width=800, height=800, dt=3.0, tail_alpha=0.7, mov_speed=10.0):
+        assert self.crowd_trj_df is not None, 'No trajectory data to visualize.'
+
+        df = self.crowd_trj_df.copy()
+        df['start_time'] = pd.to_datetime(df['start_time'])
+        df['geom'] = df['geom'].apply(lambda g: wkt.loads(g) if isinstance(g, str) else g)
+
+        if len(df) == 0:
+            raise ValueError('crowd_trj_df is empty.')
+
+        if fps <= 0:
+            raise ValueError('fps must be greater than 0.')
+
+        if dt < 0:
+            raise ValueError('dt must be non-negative.')
+
+        base_time = df['start_time'].min()
+
+        person_data = []
+        for _, row in df.iterrows():
+            geom = row['geom']
+            coords = np.asarray(geom.coords, dtype=float)
+            if len(coords) == 0:
+                continue
+
+            start_sec = (row['start_time'] - base_time).total_seconds()
+            duration = max(len(coords) - 1, 0)
+
+            person_data.append({
+                'pid': row['pid'],
+                'start_sec': start_sec,
+                'end_sec': start_sec + duration,
+                'coords': coords
+            })
+        logger.info(f'creating video - {filename} (person num: {len(person_data)}, fps: {fps}, dt: {dt})')
+
+        if len(person_data) == 0:
+            raise ValueError('No valid trajectory data found.')
+
+        total_duration = max(p['end_sec'] for p in person_data)
+
+        def point_at_time(coords, rel_t):
+            """
+            coords: shape (N, 2)
+            rel_t : trajectory-relative time [sec]
+            """
+            if len(coords) == 1:
+                return coords[0]
+
+            rel_t = max(0.0, min(rel_t, len(coords) - 1))
+            i0 = int(np.floor(rel_t))
+            i1 = min(i0 + 1, len(coords) - 1)
+
+            if i0 == i1:
+                return coords[i0]
+
+            w = rel_t - i0
+            return (1.0 - w) * coords[i0] + w * coords[i1]
+
+        def tail_coords(coords, t0, t1):
+            """
+            軌跡の [t0, t1] 秒区間を切り出した折れ線座標を返す
+            """
+            if t1 < t0:
+                return None
+
+            if len(coords) == 1:
+                return coords[[0]]
+
+            start_pt = point_at_time(coords, t0)
+            end_pt = point_at_time(coords, t1)
+
+            points = [start_pt]
+
+            mid_start = int(np.floor(t0)) + 1
+            mid_end = int(np.ceil(t1)) - 1
+            if mid_start <= mid_end:
+                for idx in range(mid_start, mid_end + 1):
+                    points.append(coords[idx])
+
+            points.append(end_pt)
+
+            out = np.asarray(points, dtype=float)
+
+            # 連続同一点の重複を除去
+            if len(out) >= 2:
+                keep = [0]
+                for i in range(1, len(out)):
+                    if not np.allclose(out[i], out[keep[-1]]):
+                        keep.append(i)
+                out = out[keep]
+
+            return out
+
+        dpi = 100
+        fig, ax = plt.subplots(figsize=(width / dpi, height / dpi), dpi=dpi)
+
+        # room polygon
+        room_x, room_y = self.room_polygon.exterior.xy
+        ax.plot(room_x, room_y, color='black', linewidth=1.5)
+
+        minx, miny, maxx, maxy = self.room_polygon.bounds
+        pad_x = max((maxx - minx) * 0.05, 1.0e-6)
+        pad_y = max((maxy - miny) * 0.05, 1.0e-6)
+        ax.set_xlim(minx - pad_x, maxx + pad_x)
+        ax.set_ylim(miny - pad_y, maxy + pad_y)
+        ax.set_aspect('equal', adjustable='box')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.grid(True, alpha=0.3)
+
+        title_text = ax.set_title('')
+
+        # person artists
+        line_artists = []
+        head_artists = []
+        colors = plt.cm.tab20(np.linspace(0, 1, max(len(person_data), 20)))
+
+        for i, p in enumerate(person_data):
+            color = colors[i % len(colors)]
+            line, = ax.plot([], [], '-', color=color, alpha=tail_alpha, linewidth=2)
+            head, = ax.plot([], [], 'o', color=color, markersize=4)
+            line_artists.append(line)
+            head_artists.append(head)
+        frame_num = int(np.ceil(total_duration * fps)) + 1
+
+        pbar = tqdm(total=frame_num)
+        def update(frame_idx):
+            current_t = frame_idx / fps
+
+            for i, p in enumerate(person_data):
+                if current_t < p['start_sec'] or current_t > p['end_sec']:
+                    line_artists[i].set_data([], [])
+                    head_artists[i].set_data([], [])
+                    continue
+
+                rel_t1 = current_t - p['start_sec']
+                rel_t0 = max(0.0, rel_t1 - dt)
+
+                trj = tail_coords(p['coords'], rel_t0, rel_t1)
+                if trj is None or len(trj) == 0:
+                    line_artists[i].set_data([], [])
+                    head_artists[i].set_data([], [])
+                    continue
+
+                line_artists[i].set_data(trj[:, 0], trj[:, 1])
+                head_artists[i].set_data([trj[-1, 0]], [trj[-1, 1]])
+
+            current_dt = base_time + timedelta(seconds=current_t)
+            title_text.set_text(current_dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+            pbar.update(1)
+            return [title_text] + line_artists + head_artists
+
+        logger.info(f'starting animation (total_duration: {total_duration:.2f} sec, frame_num: {frame_num})')
+        anim = FuncAnimation(
+            fig,
+            update,
+            frames=frame_num,
+            interval=1000 / fps,
+            blit=True
+        )
+
+        dir_name = os.path.dirname(filename)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+
+        writer = FFMpegWriter(fps=fps)
+        anim.save(filename, writer=writer)
+        plt.close(fig)
+        logger.info(f'saved video - {filename}')
+        if mov_speed != 1.0:
+            logger.info(f'moving video with speed {mov_speed}x')
+            os.rename(filename, f'{filename}.tmp')
+            change_speed_ffmpeg(f'{filename}.tmp', filename, mov_speed)
+            os.remove(f'{filename}.tmp')
+        return
 
 def test():
     crowd_list = Crowd.csv_to_crowd_list('./workspace/gis/test_light.csv')
