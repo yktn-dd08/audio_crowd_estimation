@@ -1,0 +1,59 @@
+{
+    "train": {
+        "input_folder_list": [
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_10",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_11",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_12",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_13",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_14",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_15",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_16",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_17",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_18",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_19",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_20",
+            "./workspace/sim/marunouchi/asphalt/train/roi1_crowd0806_21"
+        ],
+        "valid_folder_list": [
+            "./workspace/sim/atc/monaural/asphalt/test/roi1_crowd1031_14"
+        ],
+        "model_folder": "./workspace/model/train/asphalt/mc2atc_SimpleCNN2_f5_d3_test",
+        "model_name": "SimpleCNN2",
+        "target": ["distance_3"],
+        "batch_size": 64,
+        "n_trials": 500,
+        "model_param": {
+            "time_sec": 5,
+            "frame_num": 501,
+            "freq_num": 64,
+
+            "layer_num": 3,
+            "kernel_size": [
+                9,
+                23,
+                23
+            ],
+            "dilation_size": [
+                3,
+                1,
+                1
+            ],
+            "inter_ch": [
+                16,
+                13,
+                12
+            ],
+            "pool_size": [
+                2,
+                1,
+                1
+            ],
+            "lr": 0.00001,
+            "weight_decay": 0.0,
+            "criterion": "MAE"
+        },
+        "epoch": 50,
+        "log_scale": true,
+        "time_agg": true
+    }
+}

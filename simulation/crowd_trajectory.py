@@ -21,8 +21,6 @@ def execute_json(config_path):
                 end_time=param.get('end_time', common_param.get('end_time', 100)),
                 v=param.get('v', common_param.get('v', 1.5)),
                 v_sigma=param.get('v_sigma', common_param.get('v_sigma', 0.3)),
-                exist_time=param.get('exist_time', common_param.get('exist_time', 60)),
-                exist_time_sigma=param.get('exist_time_sigma', common_param.get('exist_time_sigma', 0.0)),
                 dir_division=param.get('dir_division', common_param.get('dir_division', 8)),
                 datetime_str=param.get('datetime_str', common_param.get('datetime_str', '2024-01-01 00:00:00'))
             )
@@ -32,7 +30,7 @@ def execute_json(config_path):
 
 def test():
     crowd_trj = CrowdTrajectory()
-    crowd_trj.set_crowd_trajectory(
+    crowd_trj.set_crowd_trajectory_old(
         person_num=100,
         start_time=0,
         end_time=100,

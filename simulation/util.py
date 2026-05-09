@@ -881,6 +881,105 @@ class PersonTrajectory:
     def __init__(
             self,
             pid: int,
+            room_polygon: Polygon,
+            start_time: int | float = 0.0,
+            duration: int | float = 3600.0,
+            start_point: Point = None,
+            v: float = 1.0,
+            v_sigma: float = 0.0,
+            dir_sigma: float = None
+    ):
+        """
+        一人分の移動軌跡を生成するクラス
+        壁反射なしの単純なランダムウォークで生成する
+        Parameters
+        ----------
+        pid
+        room_polygon
+        start_time
+        start_point
+        v
+        v_sigma
+        dir_sigma
+        """
+        self.pid = pid
+        self.start_time = start_time
+        self.duration = duration
+        self.room_polygon = room_polygon
+        self.start_point = start_point if start_point is not None else self.__get_random_point_from_room_edge()
+        self.v = v
+        self.v_sigma = v_sigma
+        self.dir_sigma = math.pi / 8 if dir_sigma is None else dir_sigma
+        self.trajectory = None
+        return
+
+    def __get_random_point_from_room_edge(self):
+        """
+        room_polygonの外周からランダムに点を選ぶ
+        Returns
+        -------
+        result: Point
+        """
+        line_string = self.room_polygon.exterior
+        total_length = line_string.length
+        random_length = random.uniform(0, total_length)
+        return line_string.interpolate(random_length)
+
+    def __get_direction_from_point(self, point):
+        """
+        入力された点から部屋の中心に向かう方向を計算する
+        Parameters
+        ----------
+        point: Point
+            入力点
+        Returns
+        -------
+        result: float
+            部屋の中心に向かう方向（ラジアン）
+        """
+        room_center = self.room_polygon.centroid
+        return math.atan2(room_center.y - point.y, room_center.x - point.x)
+
+    def generate_trajectory(self, time_step=1.0, simulation_total_time=3600.0):
+        current_point = self.start_point
+        # current_dir = random.uniform(0, 2 * math.pi)
+        current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 2.0)
+        while not self.room_polygon.contains(
+                Point(
+                    current_point.x + self.v * 5 * math.cos(current_dir),
+                    current_point.y + self.v * 5 * math.sin(current_dir)
+                )
+        ):
+            current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 2.0)
+        history = [(self.start_time, current_point, current_dir)]
+        duration = simulation_total_time - self.start_time if self.duration is None else self.duration
+        idx = 0
+        for t in np.arange(self.start_time + time_step, self.start_time + duration, time_step):
+            # 速度と方向にランダムノイズを加える
+            v_t = max(0.0, random.gauss(self.v, self.v_sigma))
+            # 最初だけは方向にノイズを加えない（点が部屋の外に行く可能性があるため）
+            dir_t = random.gauss(current_dir, self.dir_sigma) if idx > 0 else current_dir
+            # 次の点を計算する
+            new_x = current_point.x + v_t * time_step * math.cos(dir_t)
+            new_y = current_point.y + v_t * time_step * math.sin(dir_t)
+            new_point = Point(new_x, new_y)
+
+            current_point = new_point
+            current_dir = dir_t
+            history.append((t, current_point, current_dir))
+            idx += 1
+            if not self.room_polygon.contains(new_point):
+                # 部屋の外に出たら終了
+                break
+
+        self.trajectory = LineString([h[1] for h in history])
+        return
+
+
+class PersonTrajectoryOld:
+    def __init__(
+            self,
+            pid: int,
             start_time: int | float,
             end_time: int | float,
             start_point: Point,
@@ -891,6 +990,7 @@ class PersonTrajectory:
     ):
         """
         一人分の移動軌跡を生成するクラス
+        壁に当たった場合は反射するように生成する
         Parameters
         ----------
         pid: int
@@ -986,15 +1086,20 @@ class CrowdTrajectory:
 
     def __init__(
             self,
-            room_polygon: Polygon = None
+            room_polygon: Polygon = None,
+            room_size = 100
     ):
         self.crowd_trj_df = None
         self.person_trajectories = []
-        default_coords = ((-20, -20), (-20, 20), (20, 20), (20, -20), (-20, -20))
+        default_coords = ((-room_size/2, -room_size/2),
+                          (-room_size/2, room_size/2),
+                          (room_size/2, room_size/2),
+                          (room_size/2, -room_size/2),
+                          (-room_size/2, -room_size/2))
         self.room_polygon = Polygon(default_coords) if room_polygon is None else room_polygon
         return
 
-    def set_crowd_trajectory(
+    def set_crowd_trajectory_old(
             self,
             person_num,
             start_time,
@@ -1011,7 +1116,7 @@ class CrowdTrajectory:
             each_time = int(random.random() * (end_time - start_time) + start_time)
             start_point = Point(random.uniform(self.room_polygon.bounds[0], self.room_polygon.bounds[2]),
                                 random.uniform(self.room_polygon.bounds[1], self.room_polygon.bounds[3]))
-            person_trajectory = PersonTrajectory(
+            person_trajectory = PersonTrajectoryOld(
                 pid=pid,
                 start_time=each_time,
                 end_time=each_time + delta_time,
@@ -1031,6 +1136,45 @@ class CrowdTrajectory:
             start_time = dt + timedelta(seconds=pt.start_time)
             line_string = pt.trajectory
             trj_list.append({'id': pt.pid, 'start_time': start_time, 'geom': line_string})
+        self.crowd_trj_df = pd.DataFrame(trj_list)
+        logger.info('crowd trajectory generated.')
+        return
+
+    def set_crowd_trajectory(
+            self,
+            person_num,
+            start_time,
+            end_time,
+            v=1.5,
+            v_sigma=0.3,
+            dir_division=8,
+            datetime_str='2024-01-01 00:00:00'
+    ):
+        for pid in range(person_num):
+            each_start_time = int(random.random() * (end_time - start_time) * 0.95 + start_time)
+            if pid == 0:
+                each_start_time = 0
+            person_trajectory = PersonTrajectory(
+                pid=pid,
+                start_time=each_start_time,
+                room_polygon=self.room_polygon,
+                v=v+random.gauss(0, 0.1),
+                v_sigma=v_sigma,
+                dir_sigma=math.pi / dir_division
+            )
+            self.person_trajectories.append(person_trajectory)
+
+        logger.info(f'set crowd setting - person num: {person_num}, time range: ({start_time}, {end_time}), v: {v}')
+        sim_total_time = end_time - start_time
+        dt = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
+        trj_list = []
+        pbar = tqdm(total=person_num)
+        for pt in self.person_trajectories:
+            pt.generate_trajectory(simulation_total_time=sim_total_time)
+            start_time = dt + timedelta(seconds=pt.start_time)
+            line_string = pt.trajectory
+            trj_list.append({'id': pt.pid, 'start_time': start_time, 'geom': line_string})
+            pbar.update(1)
         self.crowd_trj_df = pd.DataFrame(trj_list)
         logger.info('crowd trajectory generated.')
         return
@@ -1077,7 +1221,7 @@ class CrowdTrajectory:
             duration = max(len(coords) - 1, 0)
 
             person_data.append({
-                'pid': row['pid'],
+                'pid': row['id'],
                 'start_sec': start_sec,
                 'end_sec': start_sec + duration,
                 'coords': coords
@@ -1225,6 +1369,22 @@ class CrowdTrajectory:
             os.remove(f'{filename}.tmp')
         return
 
+def test_crowd_sim(person_num=1000, room_size=100):
+    crowd_traj = CrowdTrajectory(room_size=room_size)
+    crowd_traj.set_crowd_trajectory(
+        person_num=person_num,
+        start_time=0,
+        end_time=600,
+        v=1.5,
+        v_sigma=0.3,
+        dir_division=8,
+        datetime_str='2024-01-01 00:00:00'
+    )
+    crowd_traj.to_csv(f'./workspace/random_traj{person_num}.csv')
+    crowd_traj.create_video(f'./workspace/random_traj{person_num}.mp4')
+
+    return
+
 def test():
     crowd_list = Crowd.csv_to_crowd_list('./workspace/gis/test_light.csv')
     # df = pd.read_csv('./workspace/gis/test_light.csv')
@@ -1249,6 +1409,16 @@ def test():
     signals = signals / signals.max()
     wavfile.write('./workspace/gis/marunouchi_footstep.wav', SR, signals.T)
     return
+
+
+class SocialForceSimulation:
+    def __init__(self):
+        return
+
+
+class SocialForcePerson:
+    def __init__(self):
+        return
 
 
 def audio_crowd_simulation_(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0,

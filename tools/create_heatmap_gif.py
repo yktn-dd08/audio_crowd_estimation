@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from common.logger import get_logger
 
-logger = get_logger('tools.create_heatmap_mp4')
+logger = get_logger('tools.create_heatmap')
 
 
 def parse_coordinates(columns, prefix='target_count_'):
@@ -39,7 +39,7 @@ def build_grid_mapping(coords):
     return xs, ys, x_to_idx, y_to_idx
 
 
-def make_heatmap_mp4_auto(
+def make_heatmap_video(
     df: pd.DataFrame,
     output_path: str,
     fps: float = 1.0,
@@ -127,11 +127,16 @@ def make_heatmap_mp4_auto(
     logger.info(f"Saved: {output_path}")
 
 
+def make_heatmap_png(input_folder, output_png, cmap='jet', v_min=None, v_max=None, title='Heatmap'):
+    raise NotImplementedError("PNG output is not implemented yet.")
+
+
 # ===== 使用例 =====
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input-file', type=str)
-    parser.add_argument('-o', '--output-file', type=str)
+    parser.add_argument('-opt', '--option', type=str, choices=['gif', 'png'], default='gif')
+    parser.add_argument('-i', '--input', type=str)
+    parser.add_argument('-o', '--output', type=str)
     parser.add_argument('--fps', type=float, default=1.0, help='Frames per second of output mp4')
     parser.add_argument('--cmap', type=str, default='jet', help='Colormap for the heatmap')
     parser.add_argument('--vmin', type=float, default=None, help='Minimum value for color scale')
@@ -139,13 +144,16 @@ if __name__ == "__main__":
     parser.add_argument('--title', type=str, default='Heatmap Animation', help='Title for the heatmap')
     args = parser.parse_args()
 
-    df = pd.read_csv(args.input_file)
-    make_heatmap_mp4_auto(
-        df=df,
-        output_path=args.output_file,
-        fps=args.fps,
-        cmap=args.cmap,
-        v_min=args.vmin,
-        v_max=args.vmax,
-        title=args.title
-    )
+    if args.option == 'png':
+        raise NotImplementedError("PNG output is not implemented yet.")
+    elif args.option == 'gif':
+        df = pd.read_csv(args.input)
+        make_heatmap_video(
+            df=df,
+            output_path=args.output,
+            fps=args.fps,
+            cmap=args.cmap,
+            v_min=args.vmin,
+            v_max=args.vmax,
+            title=args.title
+        )
