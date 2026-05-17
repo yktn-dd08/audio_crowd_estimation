@@ -913,14 +913,18 @@ class PersonTrajectory:
         self.trajectory = None
         return
 
-    def __get_random_point_from_room_edge(self):
+    def __get_random_point_from_room_edge(self, buffer=0.01):
         """
         room_polygonの外周からランダムに点を選ぶ
+        Parameters
+        ----------
+        buffer: float
+            外周からの距離。正の値なら外周から内側に、負の値なら外周から外側に点が選ばれる
         Returns
         -------
         result: Point
         """
-        line_string = self.room_polygon.exterior
+        line_string = self.room_polygon.buffer(distance=-buffer).exterior
         total_length = line_string.length
         random_length = random.uniform(0, total_length)
         return line_string.interpolate(random_length)
@@ -943,14 +947,14 @@ class PersonTrajectory:
     def generate_trajectory(self, time_step=1.0, simulation_total_time=3600.0):
         current_point = self.start_point
         # current_dir = random.uniform(0, 2 * math.pi)
-        current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 2.0)
+        current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 16.0)
         while not self.room_polygon.contains(
                 Point(
                     current_point.x + self.v * 5 * math.cos(current_dir),
                     current_point.y + self.v * 5 * math.sin(current_dir)
                 )
         ):
-            current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 2.0)
+            current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 16.0)
         history = [(self.start_time, current_point, current_dir)]
         duration = simulation_total_time - self.start_time if self.duration is None else self.duration
         idx = 0
@@ -1097,6 +1101,7 @@ class CrowdTrajectory:
                           (room_size/2, -room_size/2),
                           (-room_size/2, -room_size/2))
         self.room_polygon = Polygon(default_coords) if room_polygon is None else room_polygon
+        logger.debug(f'CrowdTrajectory initialized with room polygon: {self.room_polygon}')
         return
 
     def set_crowd_trajectory_old(

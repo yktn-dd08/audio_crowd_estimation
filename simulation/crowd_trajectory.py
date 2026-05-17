@@ -14,7 +14,9 @@ def execute_json(config_path):
         for task, param in cfg['task_list'].items():
             logger.info(f"Executing task: {task}")
             output_path = param['output_csv']
-            crowd_trj = CrowdTrajectory()
+            roi_path = param.get('roi_shp', common_param.get('roi_shp', None))
+            roi_shp = gpd.read_file(roi_path).geometry[0] if roi_path else None
+            crowd_trj = CrowdTrajectory(room_polygon=roi_shp)
             crowd_trj.set_crowd_trajectory(
                 person_num=param.get('person_num', common_param.get('person_num', 100)),
                 start_time=param.get('start_time', common_param.get('start_time', 0)),
