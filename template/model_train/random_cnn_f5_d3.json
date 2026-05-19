@@ -1,23 +1,23 @@
 {
     "train": {
         "input_folder_list": [
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_00",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_01",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_02",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_03",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_04",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_05",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_06",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_07",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_08",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_09",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_10",
-            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0401_11"
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_00",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_01",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_02",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_03",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_04",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_05",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_06",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_07",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_08",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_09",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_10",
+            "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_11"
         ],
         "valid_folder_list": [
             "./workspace/sim/atc/monaural/asphalt/test/roi1_crowd1031_14"
         ],
-        "model_folder": "./workspace/model/train/asphalt/random2_4_SimpleCNN2_f5_d3_test",
+        "model_folder": "./workspace/model/train/asphalt/random2_p50_roi20m_SimpleCNN2_f5_d3_test",
         "model_name": "SimpleCNN2",
         "target": ["distance_3"],
         "batch_size": 64,

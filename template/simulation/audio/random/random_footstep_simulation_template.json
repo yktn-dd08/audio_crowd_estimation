@@ -5,84 +5,84 @@
     "height": 3.0,
     "max_orders": 0,
     "task_list": {
-        "asphalt/train/roi1_random_crowd0501_00": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_00.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_00",
+        "asphalt/train/roi1_random_crowd0601_00": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_00.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_00",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_01": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_01.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_01",
+        "asphalt/train/roi1_random_crowd0601_01": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_01.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_01",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_02": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_02.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_02",
+        "asphalt/train/roi1_random_crowd0601_02": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_02.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_02",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_03": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_03.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_03",
+        "asphalt/train/roi1_random_crowd0601_03": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_03.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_03",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_04": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_04.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_04",
+        "asphalt/train/roi1_random_crowd0601_04": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_04.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_04",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_05": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_05.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_05",
+        "asphalt/train/roi1_random_crowd0601_05": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_05.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_05",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_06": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_06.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_06",
+        "asphalt/train/roi1_random_crowd0601_06": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_06.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_06",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_07": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_07.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_07",
+        "asphalt/train/roi1_random_crowd0601_07": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_07.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_07",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_08": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_08.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_08",
+        "asphalt/train/roi1_random_crowd0601_08": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_08.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_08",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_09": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_09.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_09",
+        "asphalt/train/roi1_random_crowd0601_09": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_09.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_09",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_10": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_10.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_10",
+        "asphalt/train/roi1_random_crowd0601_10": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_10.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_10",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_11": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_11.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_11",
+        "asphalt/train/roi1_random_crowd0601_11": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_11.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_11",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_12": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_12.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_12",
+        "asphalt/train/roi1_random_crowd0601_12": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_12.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_12",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_13": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_13.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_13",
+        "asphalt/train/roi1_random_crowd0601_13": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_13.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_13",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_14": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_14.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_14",
+        "asphalt/train/roi1_random_crowd0601_14": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_14.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_14",
             "params": {}
         },
-        "asphalt/train/roi1_random_crowd0501_15": {
-            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0501_15.csv",
-            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0501_15",
+        "asphalt/train/roi1_random_crowd0601_15": {
+            "crowd_csv": "./data/gis/random2/crowd/asphalt/train/roi1_random_crowd0601_15.csv",
+            "output_folder": "./workspace/sim/random2/monaural/asphalt/train/roi1_random_crowd0601_15",
             "params": {}
         }
     }

@@ -612,14 +612,15 @@ class CrowdSim:
                 p = [sim_param['x'][i], sim_param['y'][i], sim_param['z'][i]]
                 sig = self.foot_sound.get_wav(sim_param['foot_tag'][i], sim_param['sound_index'][i])
                 if room.is_inside(p):
+                    delay = sim_param['t'][i] - sim_param['offset']
                     try:
                         # Validate signal before adding source
                         if sig is None or len(sig) == 0 or np.any(np.isnan(sig)) or np.any(np.isinf(sig)):
                             logger.warning(f'Invalid signal for group {sim_param["group"]}, sound_index {sim_param["sound_index"][i]}')
                             continue
-                        room.add_source(position=p, signal=sig, delay=sim_param['t'][i] - sim_param['offset'])
+                        room.add_source(position=p, signal=sig, delay=delay)
                     except Exception as e:
-                        logger.warning(f'Error adding source for group {sim_param["group"]}: {str(e)}')
+                        logger.warning(f'Error adding source (position: {p}, delay:{delay} ) for group {sim_param["group"]}: {str(e)}')
                         continue
             simulated_sound = np.zeros([room.n_mics, 1])
             if room.n_sources > 0:
