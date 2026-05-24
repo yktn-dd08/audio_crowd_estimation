@@ -28,6 +28,35 @@ def execute_json(config_path):
             )
             crowd_trj.to_csv(output_path)
             logger.info(f"Saved crowd trajectory to {output_path}")
+    elif option == 'social_force':
+        for task, param in cfg['task_list'].items():
+            logger.info(f"Executing task: {task}")
+            output_path = param['output_csv']
+            roi_path = param.get('roi_shp', common_param.get('roi_shp', None))
+            roi_shp = gpd.read_file(roi_path).geometry[0] if roi_path else None
+            wall_path = param.get('wall_shp', common_param.get('wall_shp', None))
+            wall_shp = MultiPolygon(gpd.read_file(wall_path).geometry.tolist()) if wall_path else None
+            crowd_trj = SocialForceSimulation(
+                roi_polygon=roi_shp,
+                wall=wall_shp,
+                dt=1.0,
+                desired_speed=param.get('desired_speed', common_param.get('desired_speed', 1.5)),
+                velocity_noise_std=param.get('velocity_noise_std', common_param.get('velocity_noise_std', 0.3)),
+                c_obs=param.get('c_obs', common_param.get('c_obs', 2000.0)),
+                r_obs=param.get('r_obs', common_param.get('r_obs', 0.08)),
+                c_wall=param.get('c_wall', common_param.get('c_wall', 2000.0)),
+                r_wall=param.get('r_wall', common_param.get('r_wall', 0.08)),
+            )
+            crowd_trj.run(
+                person_num=param.get('person_num', common_param.get('person_num', 100)),
+                start_time=param.get('start_time', common_param.get('start_time', '2024-01-01 00:00:00')),
+                simulation_time=param.get('simulation_time', common_param.get('simulation_time', 100)),
+            )
+            crowd_trj.to_csv(output_path)
+            if 'output_mp4' in param:
+                crowd_trj.create_video(param['output_mp4'], fps=10)
+            logger.info(f"Saved crowd trajectory to {output_path}")
+
 
 
 def test():

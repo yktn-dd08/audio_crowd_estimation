@@ -1,0 +1,108 @@
+{
+    "option": "social_force",
+    "param": {
+        "person_num": 5000,
+        "simulation_time": 3600,
+        "roi_shp": "./data/gis/sfm/roi/roi1_random.shp"
+    },
+    "task_list": {
+        "sfm_crowd0101_00": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_00.csv",
+            "start_time": "2024-01-01 00:00:00",
+            "desired_speed": 1.0,
+            "c_obs": 2000.0,
+            "r_obs": 0.08,
+            "output_mp4": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_00.mp4"
+        },
+        "sfm_crowd0101_01": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_01.csv",
+            "start_time": "2024-01-01 01:00:00",
+            "desired_speed": 1.2,
+            "dir_division": 8
+        },
+        "sfm_crowd0101_02": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_02.csv",
+            "start_time": "2024-01-01 02:00:00",
+            "desired_speed": 1.4,
+            "dir_division": 8
+        },
+        "sfm_crowd0101_03": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_03.csv",
+            "start_time": "2024-01-01 03:00:00",
+            "desired_speed": 1.6,
+            "dir_division": 8
+        },
+        "sfm_crowd0101_04": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_04.csv",
+            "start_time": "2024-01-01 04:00:00",
+            "desired_speed": 1.0,
+            "dir_division": 4
+        },
+        "sfm_crowd0101_05": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_05.csv",
+            "start_time": "2024-01-01 05:00:00",
+            "desired_speed": 1.2,
+            "dir_division": 4
+        },
+        "sfm_crowd0101_06": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_06.csv",
+            "start_time": "2024-01-01 06:00:00",
+            "desired_speed": 1.4,
+            "dir_division": 4
+        },
+        "sfm_crowd0101_07": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_07.csv",
+            "start_time": "2024-01-01 07:00:00",
+            "desired_speed": 1.6,
+            "dir_division": 4
+        },
+        "sfm_crowd0101_08": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_08.csv",
+            "start_time": "2024-01-01 08:00:00",
+            "desired_speed": 1.0,
+            "dir_division": 2
+        },
+        "sfm_crowd0101_09": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_09.csv",
+            "start_time": "2024-01-01 09:00:00",
+            "desired_speed": 1.2,
+            "dir_division": 2
+        },
+        "sfm_crowd0101_10": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_10.csv",
+            "start_time": "2024-01-01 10:00:00",
+            "desired_speed": 1.4,
+            "dir_division": 2
+        },
+        "sfm_crowd0101_11": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_11.csv",
+            "start_time": "2024-01-01 11:00:00",
+            "desired_speed": 1.6,
+            "dir_division": 2
+        },
+        "sfm_crowd0101_12": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_12.csv",
+            "start_time": "2024-01-01 12:00:00",
+            "desired_speed": 1.0,
+            "dir_division": 1
+        },
+        "sfm_crowd0101_13": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_13.csv",
+            "start_time": "2024-01-01 13:00:00",
+            "desired_speed": 1.2,
+            "dir_division": 1
+        },
+        "sfm_crowd0101_14": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_14.csv",
+            "start_time": "2024-01-01 14:00:00",
+            "desired_speed": 1.4,
+            "dir_division": 1
+        },
+        "sfm_crowd0101_15": {
+            "output_csv": "./data/gis/sfm/crowd/org/roi1_sfm_crowd0101_15.csv",
+            "start_time": "2024-01-01 15:00:00",
+            "desired_speed": 1.6,
+            "dir_division": 1
+        }
+    }
+}

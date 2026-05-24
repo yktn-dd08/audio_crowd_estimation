@@ -19,7 +19,8 @@ import geopandas as gpd
 from scipy.io import wavfile
 from shapely import wkt
 from shapely.geometry import LineString, Point, Polygon
-from shapely.ops import split
+from shapely.geometry.multipolygon import MultiPolygon
+from shapely.ops import split, nearest_points, orient
 from joblib import Parallel, delayed
 from tqdm import tqdm
 from common.logger import get_logger
@@ -35,6 +36,7 @@ FS = 'sampling_rate'
 SR = 16000
 ROOM_SIZE = np.array([10.0, 10.0, 3.0])
 MIC_INTERVAL = 0.02
+MAX_SPEED = 2.0
 
 # logging.basicConfig(
 #     level=logging.DEBUG,
@@ -1417,14 +1419,1003 @@ def test():
     return
 
 
-class SocialForceSimulation:
-    def __init__(self):
-        return
+# class SocialForcePerson:
+#     def __init__(
+#             self,
+#             position,
+#             goal=None,
+#             initial_velocity=None,
+#             mass=80.0,
+#             desired_speed=1.3,
+#             relaxation_time=0.5,
+#             radius=0.3,
+#     ):
+#         """
+#         SFMの一人分の移動軌跡を生成するクラス
+#         Parameters
+#         ----------
+#         position: np.ndarray
+#             初期位置 (x, y)
+#         goal: np.ndarray or None
+#             目的地の位置 (x, y)。Noneの場合は目的地なしとする
+#         initial_velocity: np.ndarray or None
+#             初期速度 (vx, vy)。Noneの場合は初期速度なしとする
+#         mass: float
+#             人の質量 (kg)
+#         desired_speed: float
+#             目的地に向かうときの希望速度 (m/s)
+#         relaxation_time: float
+#             目的地に向かうときの加速の速さを表すパラメータ (s)
+#         radius: float
+#             人の半径 (m)
+#         """
+#         self.position = np.array(position, dtype=float)
+#
+#         # 初期速度
+#         if initial_velocity is None:
+#             self.velocity = np.zeros(2, dtype=float)
+#         else:
+#             self.velocity = np.array(initial_velocity, dtype=float)
+#
+#         # 目的地
+#         if goal is None:
+#             self.goal = None
+#         else:
+#             self.goal = np.array(goal, dtype=float)
+#
+#         self.mass = mass
+#         self.desired_speed = desired_speed
+#         self.relaxation_time = relaxation_time
+#         self.radius = radius
+#
+#         self.trajectory = [self.position.copy()]
+#         return
+#
+#     def desired_direction(self):
+#         """
+#         目的地がある場合は目的地に向かう単位ベクトルを返す。ない場合は現在の速度の単位ベクトルを返す。
+#         Returns
+#         -------
+#         result: np.ndarray
+#             目的地がある場合は目的地に向かう単位ベクトル、ない場合は現在の速度の単位ベクトル
+#         """
+#         # goal がある場合
+#         if self.goal is not None:
+#             direction = self.goal - self.position
+#             norm = np.linalg.norm(direction)
+#
+#             if norm < 1e-8:
+#                 return np.zeros(2)
+#
+#             return direction / norm
+#
+#         # goal が無い場合
+#         velocity_norm = np.linalg.norm(self.velocity)
+#
+#         if velocity_norm < 1e-8:
+#             return np.zeros(2)
+#
+#         return self.velocity / velocity_norm
+#
+#     def driving_force(self):
+#         """
+#         Social Force Modelの駆動力を計算する
+#         Returns
+#         -------
+#         result: np.ndarray
+#             駆動力ベクトル
+#         """
+#         desired_velocity = (
+#                 self.desired_speed * self.desired_direction()
+#         )
+#
+#         return (
+#                 self.mass
+#                 * (desired_velocity - self.velocity)
+#                 / self.relaxation_time
+#         )
+#
+#     def interaction_force(self, others, A=2000.0, B=0.08):
+#         """
+#         他の人との相互作用力を計算する
+#         Parameters
+#         ----------
+#         others: list of SocialForcePerson
+#             他の人のリスト
+#         A: float
+#             他の人との距離が0のときの反発力の大きさを表すパラメータ
+#         B: float
+#             他の人との距離が大きくなると反発力が減少する速さを表すパラメータ
+#
+#         Returns
+#         -------
+#
+#         """
+#         force = np.zeros(2)
+#
+#         for other in others:
+#             if other is self:
+#                 continue
+#
+#             diff = self.position - other.position
+#             distance = np.linalg.norm(diff)
+#
+#             if distance < 1e-8:
+#                 continue
+#
+#             direction = diff / distance
+#
+#             combined_radius = (
+#                     self.radius + other.radius
+#             )
+#
+#             repulsive = (
+#                     A
+#                     * np.exp(
+#                 (combined_radius - distance) / B
+#             )
+#                     * direction
+#             )
+#
+#             force += repulsive
+#
+#         return force
+#
+#     def wall_force(self, walls, A_wall=2000.0, B_wall=0.08):
+#         """
+#         壁ポリゴンの境界から最も近い点を探し、その点からエージェントを押し返す反発力を計算する。
+#         Parameters
+#         ----------
+#         walls: MultiPolygon
+#             壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
+#         A_wall: float
+#             壁に近いほど強い反発力の大きさを表すパラメータ
+#         B_wall: float
+#             壁に近いほど強い反発力の減少する速さを表すパラメータ
+#
+#         Returns
+#         -------
+#         result: np.ndarray
+#             壁からの反発力ベクトル
+#         """
+#         if walls is None:
+#             return np.zeros(2)
+#
+#         person_point = Point(float(self.position[0]), float(self.position[1]))
+#
+#         # MultiPolygon全体の境界
+#         wall_boundary = walls.boundary
+#
+#         # 壁境界上の最近傍点
+#         _, nearest_wall_point = nearest_points(person_point, wall_boundary)
+#
+#         nearest = np.array(
+#             [nearest_wall_point.x, nearest_wall_point.y],
+#             dtype=float,
+#         )
+#
+#         diff = self.position - nearest
+#         distance = np.linalg.norm(diff)
+#
+#         if distance < 1e-8:
+#             return np.zeros(2)
+#
+#         direction = diff / distance
+#
+#         # 人の半径を考慮して、壁に近いほど強い反発力
+#         force = A_wall * np.exp((self.radius - distance) / B_wall) * direction
+#
+#         return force
+#
+#     def update(self, dt, others, walls=None):
+#         """
+#         次の時間ステップにおける位置と速度を更新する
+#         Parameters
+#         ----------
+#         dt: float
+#             時間ステップ (s)
+#         others: list of SocialForcePerson
+#             他の人のリスト
+#         walls: MultiPolygon or None
+#             壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
+#
+#         Returns
+#         -------
+#
+#         """
+#         total_force = self.driving_force()
+#         total_force += self.interaction_force(others)
+#         total_force += self.wall_force(walls)
+#
+#         acceleration = total_force / self.mass
+#
+#         self.velocity += acceleration * dt
+#         self.position += self.velocity * dt
+#
+#         # もしpositionがwalls内に入ってしまったら、wallsの境界上の最近傍点にpositionを移動させる
+#         if walls is not None:
+#             person_point = Point(float(self.position[0]), float(self.position[1]))
+#             if walls.contains(person_point):
+#                 wall_boundary = walls.boundary
+#                 _, nearest_wall_point = nearest_points(person_point, wall_boundary)
+#                 self.position = np.array(
+#                     [nearest_wall_point.x, nearest_wall_point.y],
+#                     dtype=float,
+#                 )
+#
+#         self.trajectory.append(self.position.copy())
+#
+# class SocialForceSimulation:
+#     def __init__(self, persons, walls=None, dt=1.0):
+#         """
+#         SFMのシミュレーションを実行するクラス
+#         Parameters
+#         ----------
+#         persons: list of SocialForcePerson
+#             シミュレーションする人のリスト
+#         walls: MultiPolygon or None
+#             壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
+#         dt: float
+#             時間ステップ (s)
+#         """
+#         self.persons = persons
+#         self.walls = walls
+#         self.dt = dt
+#         self.time = 0.0
+#         return
+#
+#
 
 
 class SocialForcePerson:
-    def __init__(self):
+    def __init__(
+        self,
+        person_id: int,
+        position: tuple | list | np.ndarray,
+        initial_velocity: tuple | list | np.ndarray,
+        start_time: int | float,
+        goal: tuple | list | np.ndarray = None,
+        mass: float = 80.0,
+        desired_speed: float = 1.3,
+        relaxation_time:float = 0.5,
+        radius: float = 0.3,
+    ):
+        """
+        Social Force Modelの一人分の移動軌跡を生成するクラス
+        Parameters
+        ----------
+        person_id: int
+            人のID
+        position: tuple or list or np.ndarray
+            初期位置 (x, y)
+        initial_velocity: tuple or list or np.ndarray
+            初期速度 (vx, vy)
+        start_time: int or float
+            シミュレーション開始時間 (s)
+        goal: tuple or list or np.ndarray or None
+            目的地の位置 (x, y)。Noneの場合は目的地なしとする
+        mass: float
+            人の質量 (kg)
+        desired_speed: float
+            目的地に向かうときの希望速度 (m/s)
+        relaxation_time: float
+            目的地に向かうときの加速の速さを表すパラメータ (s)
+        radius: float
+            人の半径 (m)
+        """
+        self.person_id = person_id
+        self.position = np.array(position, dtype=float)
+        self.velocity = np.array(initial_velocity, dtype=float)
+        self.goal = None if goal is None else np.array(goal, dtype=float)
+
+        self.start_time = start_time
+        self.is_active = False
+        self.is_finished = False
+
+        self.mass = mass
+        self.desired_speed = desired_speed
+        self.relaxation_time = relaxation_time
+        self.radius = radius
+
+        self.trajectory = []
+
+    def desired_direction(self):
+        """
+        目的地がある場合は目的地に向かう単位ベクトルを返す。ない場合は現在の速度の単位ベクトルを返す。
+        Returns
+        -------
+        result: np.ndarray
+            目的地がある場合は目的地に向かう単位ベクトル、ない場合は現在の速度の単位ベクトル
+        """
+        if self.goal is not None:
+            direction = self.goal - self.position
+        else:
+            direction = self.velocity
+
+        norm = np.linalg.norm(direction)
+        if norm < 1e-8:
+            return np.zeros(2)
+
+        return direction / norm
+
+    def driving_force(self):
+        """
+        Social Force Modelの駆動力を計算する
+        Returns
+        -------
+        result: np.ndarray
+            駆動力ベクトル
+        """
+        desired_velocity = self.desired_speed * self.desired_direction()
+        return self.mass * (desired_velocity - self.velocity) / self.relaxation_time
+
+    def interaction_force(
+            self,
+            others: list['SocialForcePerson'] = None,
+            c_obs=2000.0,
+            r_obs=0.08
+    ):
+        """
+        他の人との相互作用力を計算する
+        Parameters
+        ----------
+        others: list of SocialForcePerson
+            他の人のリスト
+        c_obs: float
+            他の人との距離が0のときの反発力の大きさを表すパラメータ
+        r_obs: float
+            他の人との距離が大きくなると反発力が減少する速さを表すパラメータ
+
+        Returns
+        -------
+
+        """
+        force = np.zeros(2)
+        if others is None:
+            return force
+
+        for other in others:
+            if other is self:
+                continue
+            if not other.is_active or other.is_finished:
+                continue
+
+            diff = self.position - other.position
+            distance = np.linalg.norm(diff)
+
+            if distance < 1e-8:
+                continue
+
+            direction = diff / distance
+            combined_radius = self.radius + other.radius
+
+            force += c_obs * np.exp((combined_radius - distance) / r_obs) * direction
+
+        return force
+
+    def wall_force(
+            self,
+            walls: Polygon | MultiPolygon = None,
+            c_wall: float = 2000.0,
+            r_wall: float = 0.08
+    ):
+        """
+        壁ポリゴンの境界から最も近い点を探し、その点からエージェントを押し返す反発力を計算する。
+        Parameters
+        ----------
+        walls: Polygon or MultiPolygon or None
+            壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
+        c_wall: float
+            壁に近いほど強い反発力の大きさを表すパラメータ
+        r_wall: float
+            壁に近いほど強い反発力の減少する速さを表すパラメータ
+
+        Returns
+        -------
+        result: np.ndarray
+            壁からの反発力ベクトル
+        """
+        if walls is None:
+            return np.zeros(2)
+
+        point = Point(float(self.position[0]), float(self.position[1]))
+        boundary = walls.boundary
+
+        _, nearest_wall_point = nearest_points(point, boundary)
+
+        nearest = np.array(
+            [nearest_wall_point.x, nearest_wall_point.y],
+            dtype=float,
+        )
+
+        diff = self.position - nearest
+        distance = np.linalg.norm(diff)
+
+        if distance < 1e-8:
+            return np.zeros(2)
+
+        direction = diff / distance
+
+        return c_wall * np.exp((self.radius - distance) / r_wall) * direction
+
+    def update(
+            self,
+            dt: float = 0.01,
+            others: list['SocialForcePerson'] = None,
+            walls: Polygon | MultiPolygon = None,
+            c_obs: float = 2000.0,
+            r_obs: float = 0.08,
+            c_wall: float = 2000.0,
+            r_wall: float = 0.08
+    ):
+        """
+        次の時間ステップにおける位置と速度を更新する
+        Parameters
+        ----------
+        dt: float
+            時間ステップ (s)
+        others: list of SocialForcePerson
+            他の人のリスト
+        walls: Polygon or MultiPolygon or None
+            壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
+        c_obs: float
+            他の人との距離が0のときの反発力の大きさを表すパラメータ
+        r_obs: float
+            他の人との距離が大きくなると反発力が減少する速さを表すパラメータ
+        c_wall: float
+            壁に近いほど強い反発力の大きさを表すパラメータ
+        r_wall: float
+            壁に近いほど強い反発力の減少する速さを表すパラメータ
+
+        Returns
+        -------
+
+        """
+        if not self.is_active or self.is_finished:
+            return
+
+        total_force = self.driving_force()
+        total_force += self.interaction_force(others, c_obs=c_obs, r_obs=r_obs)
+        total_force += self.wall_force(walls, c_wall=c_wall, r_wall=r_wall)
+
+        acceleration = total_force / self.mass
+        self.velocity += acceleration * dt
+        speed = np.linalg.norm(self.velocity)
+        if speed > MAX_SPEED:
+            self.velocity = self.velocity / speed * MAX_SPEED
+        self.position += self.velocity * dt
+
+        # もしpositionがwalls内に入ってしまったら、wallsの境界上の最近傍点にpositionを移動させる
+        if walls is not None:
+            person_point = Point(float(self.position[0]), float(self.position[1]))
+            if walls.contains(person_point):
+                wall_boundary = walls.boundary
+                _, nearest_wall_point = nearest_points(person_point, wall_boundary)
+                self.position = np.array(
+                    [nearest_wall_point.x, nearest_wall_point.y],
+                    dtype=float,
+                )
+
+    def record_trajectory(self, current_time, absolute_time):
+        self.trajectory.append({
+            "pid": self.person_id,
+            "time": current_time,
+            "datetime": absolute_time,
+            "x": self.position[0],
+            "y": self.position[1],
+            "vx": self.velocity[0],
+            "vy": self.velocity[1],
+        })
+
+
+class SocialForceSimulation:
+    def __init__(
+        self,
+        roi_polygon: Polygon,
+        wall: Polygon | MultiPolygon = None,
+        dt: float | int = 1,
+        desired_speed: float = 1.3,
+        velocity_noise_std=0.2,
+        c_obs: float = 2000.0,
+        r_obs: float = 0.08,
+        c_wall: float = 2000.0,
+        r_wall: float = 0.08,
+        seed=0,
+    ):
+        """
+        Social Force Modelのシミュレーションを実行するクラス
+        Parameters
+        ----------
+        roi_polygon: Polygon
+            シミュレーションの関心領域を表すPolygon。エージェントはこの領域内にいる間だけ移動する。
+            領域外に出たエージェントはシミュレーションから除外される
+        wall: Polygon or MultiPolygon or None
+            壁・障害物を表すPolygonまたはMultiPolygon。Noneの場合は壁なしとする
+        dt: float or int
+            シミュレーションの時間刻み [s]
+        desired_speed: float
+            エージェントの希望速度 [m/s]
+        velocity_noise_std: float
+            エージェントの初期速度に加えるノイズの標準偏差
+        c_obs: float
+            他の人との距離が0のときの反発力の大きさを表すパラメータ
+        r_obs: float
+            他の人との距離が大きくなると反発力が減少する速さを表すパラメータ
+        c_wall: float
+            壁に近いほど強い反発力の大きさを表すパラメータ
+        r_wall: float
+            壁に近いほど強い反発力の減少する速さを表すパラメータ
+        seed: int or None
+            乱数シード。Noneの場合はランダムなシードを使用
+        """
+        self.roi_area = orient(roi_polygon, sign=1.0)
+        self.walls = wall
+
+        self.dt = dt
+        self.desired_speed = desired_speed
+        self.velocity_noise_std = velocity_noise_std
+
+        self.rng = np.random.default_rng(seed)
+        self.sfm_params = {
+            'c_obs': c_obs,
+            'r_obs': r_obs,
+            'c_wall': c_wall,
+            'r_wall': r_wall,
+        }
+        self.persons = []
+        self.crowd_trj_df = None
+
+    def _sample_boundary_point_and_inward_normal(self):
+        """
+        関心領域の境界上のランダムな点と、その点における内向き法線ベクトルをサンプリングする
+        Returns
+        -------
+        position: np.ndarray
+            境界上の点の座標 (x, y)
+        inward_normal: np.ndarray
+            境界上の点における内向き法線ベクトル (nx, ny)
+        """
+        exterior = self.roi_area.exterior
+        boundary_length = exterior.length
+
+        distance_on_boundary = self.rng.uniform(0, boundary_length)
+        point = exterior.interpolate(distance_on_boundary)
+
+        coords = list(exterior.coords)
+
+        accumulated = 0.0
+        selected_segment = None
+
+        for p1, p2 in zip(coords[:-1], coords[1:]):
+            p1 = np.array(p1, dtype=float)
+            p2 = np.array(p2, dtype=float)
+
+            segment = p2 - p1
+            segment_length = np.linalg.norm(segment)
+
+            if accumulated + segment_length >= distance_on_boundary:
+                selected_segment = segment
+                break
+
+            accumulated += segment_length
+
+        if selected_segment is None:
+            selected_segment = np.array(coords[1]) - np.array(coords[0])
+
+        tangent = selected_segment / np.linalg.norm(selected_segment)
+
+        # Polygonを反時計回りにしているので、進行方向左側が内側
+        inward_normal = np.array([-tangent[1], tangent[0]])
+
+        position = np.array([point.x, point.y], dtype=float)
+
+        return position, inward_normal
+
+    def _generate_initial_velocity(self, inward_normal):
+        """
+        初期速度を生成する。基本的には内向き法線方向に希望速度を持たせるが、ノイズも加える
+        Parameters
+        ----------
+        inward_normal: np.ndarray
+            境界上の点における内向き法線ベクトル (nx, ny)
+
+        Returns
+        -------
+        initial_velocity: np.ndarray
+            初期速度ベクトル (vx, vy)
+        """
+        noise = self.rng.normal(
+            loc=0.0,
+            scale=self.velocity_noise_std,
+            size=2,
+        )
+
+        direction = inward_normal + noise
+        norm = np.linalg.norm(direction)
+
+        if norm < 1e-8:
+            direction = inward_normal
+        else:
+            direction = direction / norm
+
+        return self.desired_speed * direction
+
+    def _create_persons(
+            self,
+            person_num: int,
+            simulation_time: float,
+            walls: Polygon | MultiPolygon = None
+    ):
+        """
+        初期位置を関心領域の境界上からランダムにサンプリングし、初期速度を内向き法線方向に希望速度を持たせて生成する
+        Parameters
+        ----------
+        person_num: int
+            発生させるエージェント数
+        simulation_time: float
+            シミュレーション秒数 [s]
+
+        Returns
+        -------
+
+        """
+        self.persons = []
+
+        start_time = self.rng.uniform(
+            low=0.0,
+            high=simulation_time,
+            size=person_num,
+        )
+
+        start_time.sort()
+        start_time = start_time.tolist()
+
+        for person_id in range(person_num):
+            position, inward_normal = self._sample_boundary_point_and_inward_normal()
+
+            if walls is not None:
+                point = Point(float(position[0]), float(position[1]))
+                if walls.contains(point):
+                    # 壁の内側にサンプリングされてしまった場合は、壁の外側にサンプリングされるまで再サンプリングする
+                    while True:
+                        position, inward_normal = self._sample_boundary_point_and_inward_normal()
+                        point = Point(float(position[0]), float(position[1]))
+                        if not walls.contains(point):
+                            break
+
+            initial_velocity = self._generate_initial_velocity(inward_normal)
+
+            person = SocialForcePerson(
+                person_id=person_id,
+                position=position,
+                initial_velocity=initial_velocity,
+                start_time=start_time[person_id],
+                goal=None,
+                desired_speed=self.desired_speed,
+            )
+
+            self.persons.append(person)
+
+    def step(self, current_time, absolute_time):
+        """
+        1ステップ分シミュレーションを進める
+        Parameters
+        ----------
+        current_time: float
+            シミュレーション開始からの経過時間 (s)
+        absolute_time: datetime
+            シミュレーション開始日時 + current_time
+
+        Returns
+        -------
+        None
+        """
+        for person in self.persons:
+            if person.is_finished:
+                continue
+
+            if (not person.is_active) and current_time >= person.start_time:
+                person.is_active = True
+
+            if not person.is_active:
+                continue
+
+            person.update(
+                dt=self.dt,
+                others=self.persons,
+                walls=self.walls,
+                c_obs=self.sfm_params['c_obs'],
+                r_obs=self.sfm_params['r_obs'],
+                c_wall=self.sfm_params['c_wall'],
+                r_wall=self.sfm_params['r_wall'],
+            )
+
+            point = Point(person.position[0], person.position[1])
+
+            if not self.roi_area.contains(point):
+                person.is_active = False
+                person.is_finished = True
+                continue
+
+            person.record_trajectory(
+                current_time=current_time,
+                absolute_time=absolute_time,
+            )
+
+    def run(self, person_num, simulation_time, start_time):
+        """
+        person_num:
+            発生させるエージェント数
+
+        simulation_time:
+            シミュレーション秒数 [s]
+
+        start_time:
+            シミュレーション開始日時
+            datetime型または文字列
+        """
+
+        if isinstance(start_time, str):
+            start_time = datetime.fromisoformat(start_time)
+
+        logger.info(f'starting simulation - simulation_time: {simulation_time:.2f} sec, start_time: {start_time}')
+        self._create_persons(
+            person_num=person_num,
+            simulation_time=simulation_time,
+        )
+        logger.info(f'created {len(self.persons)} persons')
+
+        steps = int(simulation_time / self.dt)
+
+        # tqdmを使用してシミュレーションの進行状況を表示
+        pbar = tqdm(total=steps, desc='Simulating', unit='step')
+        for step_idx in range(steps):
+            current_time = step_idx * self.dt
+            absolute_time = start_time + timedelta(seconds=current_time)
+
+            self.step(
+                current_time=current_time,
+                absolute_time=absolute_time,
+            )
+            pbar.update(1)
+        pbar.close()
+        logger.info('simulation finished')
+
+        records = []
+        for person in self.persons:
+            records.extend(person.trajectory)
+        trajectory_df = pd.DataFrame(records)
+        trj_list = [
+            {
+                'id': pid,
+                'start_time': min(grp_df['datetime']),
+                'geom': LineString(grp_df.sort_values(by='datetime')[['x', 'y']].values)
+            }
+            for pid, grp_df in trajectory_df.groupby('pid') if len(grp_df) > 1
+        ]
+
+        self.crowd_trj_df = pd.DataFrame(trj_list)
+        return self.crowd_trj_df
+
+    def to_csv(self, filename):
+        assert self.crowd_trj_df is not None, 'No trajectory data to save. Please run SocialForceSimulation.run() first.'
+        dir_name = os.path.dirname(filename)
+        os.makedirs(dir_name, exist_ok=True)
+        self.crowd_trj_df.to_csv(filename, index=False)
+        logger.info(f'crowd trajectory saved to {filename}')
         return
+
+    def create_video(self, filename, fps=10, width=800, height=800, dt=3.0, tail_alpha=0.7, mov_speed=10.0):
+        assert self.crowd_trj_df is not None, 'No trajectory data to visualize.'
+
+        df = self.crowd_trj_df.copy()
+        df['start_time'] = pd.to_datetime(df['start_time'])
+        df['geom'] = df['geom'].apply(lambda g: wkt.loads(g) if isinstance(g, str) else g)
+
+        if len(df) == 0:
+            raise ValueError('crowd_trj_df is empty.')
+
+        if fps <= 0:
+            raise ValueError('fps must be greater than 0.')
+
+        if dt < 0:
+            raise ValueError('dt must be non-negative.')
+
+        base_time = df['start_time'].min()
+
+        person_data = []
+        for _, row in df.iterrows():
+            geom = row['geom']
+            coords = np.asarray(geom.coords, dtype=float)
+            if len(coords) == 0:
+                continue
+
+            start_sec = (row['start_time'] - base_time).total_seconds()
+            duration = max(len(coords) - 1, 0)
+
+            person_data.append({
+                'pid': row['id'],
+                'start_sec': start_sec,
+                'end_sec': start_sec + duration,
+                'coords': coords
+            })
+        logger.info(f'creating video - {filename} (person num: {len(person_data)}, fps: {fps}, dt: {dt})')
+
+        if len(person_data) == 0:
+            raise ValueError('No valid trajectory data found.')
+
+        total_duration = max(p['end_sec'] for p in person_data)
+
+        def point_at_time(coords, rel_t):
+            """
+            coords: shape (N, 2)
+            rel_t : trajectory-relative time [sec]
+            """
+            if len(coords) == 1:
+                return coords[0]
+
+            rel_t = max(0.0, min(rel_t, len(coords) - 1))
+            i0 = int(np.floor(rel_t))
+            i1 = min(i0 + 1, len(coords) - 1)
+
+            if i0 == i1:
+                return coords[i0]
+
+            w = rel_t - i0
+            return (1.0 - w) * coords[i0] + w * coords[i1]
+
+        def tail_coords(coords, t0, t1):
+            """
+            軌跡の [t0, t1] 秒区間を切り出した折れ線座標を返す
+            """
+            if t1 < t0:
+                return None
+
+            if len(coords) == 1:
+                return coords[[0]]
+
+            start_pt = point_at_time(coords, t0)
+            end_pt = point_at_time(coords, t1)
+
+            points = [start_pt]
+
+            mid_start = int(np.floor(t0)) + 1
+            mid_end = int(np.ceil(t1)) - 1
+            if mid_start <= mid_end:
+                for idx in range(mid_start, mid_end + 1):
+                    points.append(coords[idx])
+
+            points.append(end_pt)
+
+            out = np.asarray(points, dtype=float)
+
+            # 連続同一点の重複を除去
+            if len(out) >= 2:
+                keep = [0]
+                for i in range(1, len(out)):
+                    if not np.allclose(out[i], out[keep[-1]]):
+                        keep.append(i)
+                out = out[keep]
+
+            return out
+
+        dpi = 100
+        fig, ax = plt.subplots(figsize=(width / dpi, height / dpi), dpi=dpi)
+
+        # ROI polygon
+        room_x, room_y = self.roi_area.exterior.xy
+        ax.plot(room_x, room_y, color='black', linewidth=1.5, label='ROI')
+
+        # Wall polygons
+        if self.walls is not None:
+            if isinstance(self.walls, Polygon):
+                wall_geoms = [self.walls]
+            elif isinstance(self.walls, MultiPolygon):
+                wall_geoms = list(self.walls.geoms)
+            else:
+                wall_geoms = []
+
+            for wall_poly in wall_geoms:
+                wx, wy = wall_poly.exterior.xy
+                ax.fill(
+                    wx,
+                    wy,
+                    facecolor='gray',
+                    edgecolor='black',
+                    alpha=0.5,
+                    linewidth=1.0,
+                    zorder=1,
+                )
+
+                # 穴があるPolygonの場合
+                for interior in wall_poly.interiors:
+                    ix, iy = interior.xy
+                    ax.fill(
+                        ix,
+                        iy,
+                        facecolor='white',
+                        edgecolor='black',
+                        alpha=1.0,
+                        linewidth=1.0,
+                        zorder=2,
+                    )
+
+        minx, miny, maxx, maxy = self.roi_area.bounds
+        pad_x = max((maxx - minx) * 0.05, 1.0e-6)
+        pad_y = max((maxy - miny) * 0.05, 1.0e-6)
+        ax.set_xlim(minx - pad_x, maxx + pad_x)
+        ax.set_ylim(miny - pad_y, maxy + pad_y)
+        ax.set_aspect('equal', adjustable='box')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.grid(True, alpha=0.3)
+
+        title_text = ax.set_title('')
+
+        # person artists
+        line_artists = []
+        head_artists = []
+        colors = plt.cm.tab20(np.linspace(0, 1, max(len(person_data), 20)))
+
+        for i, p in enumerate(person_data):
+            color = colors[i % len(colors)]
+            line, = ax.plot([], [], '-', color=color, alpha=tail_alpha, linewidth=2)
+            head, = ax.plot([], [], 'o', color=color, markersize=4)
+            line_artists.append(line)
+            head_artists.append(head)
+        frame_num = int(np.ceil(total_duration * fps)) + 1
+
+        pbar = tqdm(total=frame_num)
+        def update(frame_idx):
+            current_t = frame_idx / fps
+
+            for i, p in enumerate(person_data):
+                if current_t < p['start_sec'] or current_t > p['end_sec']:
+                    line_artists[i].set_data([], [])
+                    head_artists[i].set_data([], [])
+                    continue
+
+                rel_t1 = current_t - p['start_sec']
+                rel_t0 = max(0.0, rel_t1 - dt)
+
+                trj = tail_coords(p['coords'], rel_t0, rel_t1)
+                if trj is None or len(trj) == 0:
+                    line_artists[i].set_data([], [])
+                    head_artists[i].set_data([], [])
+                    continue
+
+                line_artists[i].set_data(trj[:, 0], trj[:, 1])
+                head_artists[i].set_data([trj[-1, 0]], [trj[-1, 1]])
+
+            current_dt = base_time + timedelta(seconds=current_t)
+            title_text.set_text(current_dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
+            pbar.update(1)
+            return [title_text] + line_artists + head_artists
+
+        logger.info(f'starting animation (total_duration: {total_duration:.2f} sec, frame_num: {frame_num})')
+        anim = FuncAnimation(
+            fig,
+            update,
+            frames=frame_num,
+            interval=1000 / fps,
+            blit=True
+        )
+
+        dir_name = os.path.dirname(filename)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+
+        writer = FFMpegWriter(fps=fps)
+        anim.save(filename, writer=writer)
+        plt.close(fig)
+        logger.info(f'saved video - {filename}')
+        if mov_speed != 1.0:
+            logger.info(f'moving video with speed {mov_speed}x')
+            os.rename(filename, f'{filename}.tmp')
+            change_speed_ffmpeg(f'{filename}.tmp', filename, mov_speed)
+            os.remove(f'{filename}.tmp')
+        return
+
 
 
 def audio_crowd_simulation_(crowd_csv, room_shp, output_folder, mic_shp=None, snr=None, time_unit=10.0,
@@ -1507,6 +2498,24 @@ def audio_crowd_simulation_(crowd_csv, room_shp, output_folder, mic_shp=None, sn
     #     json.dump(log_info, f, indent=4)
     return
 
+
+"""
+from simulation.util import *
+room_size = 40
+default_coords = ((-room_size / 2, -room_size / 2),
+                  (-room_size / 2, room_size / 2),
+                  (room_size / 2, room_size / 2),
+                  (room_size / 2, -room_size / 2),
+                  (-room_size / 2, -room_size / 2))
+room_polygon = Polygon(default_coords)
+wall_polygon1 = Polygon(((0, -10), (0, 10), (5, 10), (5, -10), (0, -10)))
+wall_polygon2 = Polygon(((-10, -30), (-10, -10), (10, -15), (10, -30), (-10, -30)))
+walls = MultiPolygon([wall_polygon1, wall_polygon2])
+sfm = SocialForceSimulation(roi_polygon=room_polygon, wall=walls)
+hoge_df = sfm.run(person_num=1000, simulation_time=100, start_time='2025-01-01 00:00:00')
+sfm.create_video('./workspace/sfm_p10000_test.mp4', fps=10)
+
+"""
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
