@@ -37,6 +37,7 @@ SR = 16000
 ROOM_SIZE = np.array([10.0, 10.0, 3.0])
 MIC_INTERVAL = 0.02
 MAX_SPEED = 2.0
+MAX_ACC = 1.0
 
 # logging.basicConfig(
 #     level=logging.DEBUG,
@@ -1879,22 +1880,46 @@ class SocialForcePerson:
         total_force += self.wall_force(walls, c_wall=c_wall, r_wall=r_wall)
 
         acceleration = total_force / self.mass
+        acc_norm = np.linalg.norm(acceleration)
+        if acc_norm > MAX_ACC:
+            acceleration = acceleration / acc_norm * MAX_ACC
         self.velocity += acceleration * dt
         speed = np.linalg.norm(self.velocity)
         if speed > MAX_SPEED:
             self.velocity = self.velocity / speed * MAX_SPEED
         self.position += self.velocity * dt
 
+        self.project_out_of_walls(walls)
+
         # もしpositionがwalls内に入ってしまったら、wallsの境界上の最近傍点にpositionを移動させる
-        if walls is not None:
-            person_point = Point(float(self.position[0]), float(self.position[1]))
-            if walls.contains(person_point):
-                wall_boundary = walls.boundary
-                _, nearest_wall_point = nearest_points(person_point, wall_boundary)
-                self.position = np.array(
-                    [nearest_wall_point.x, nearest_wall_point.y],
-                    dtype=float,
-                )
+        # if walls is not None:
+        #     person_point = Point(float(self.position[0]), float(self.position[1]))
+        #     if walls.contains(person_point):
+        #         wall_boundary = walls.boundary
+        #         _, nearest_wall_point = nearest_points(person_point, wall_boundary)
+        #
+        #         nearest = np.array(
+        #             [nearest_wall_point.x, nearest_wall_point.y],
+        #             dtype=float,
+        #         )
+        #
+        #         diff = self.position - nearest
+        #         dist = np.linalg.norm(diff)
+        #
+        #         if dist > 1e-8:
+        #             normal = diff / dist
+        #
+        #             # 壁境界上に戻す
+        #             self.position = nearest + normal * self.radius
+        #
+        #             # 壁へ向かう速度成分を消す
+        #             vn = np.dot(self.velocity, normal)
+        #             if vn < 0:
+        #                 self.velocity -= vn * normal
+        #         # self.position = np.array(
+        #         #     [nearest_wall_point.x, nearest_wall_point.y],
+        #         #     dtype=float,
+        #         # )
 
     def record_trajectory(self, current_time, absolute_time):
         self.trajectory.append({
@@ -1906,6 +1931,45 @@ class SocialForcePerson:
             "vx": self.velocity[0],
             "vy": self.velocity[1],
         })
+
+    def project_out_of_walls(self, walls, margin=0.05):
+        if walls is None:
+            return
+
+        point = Point(float(self.position[0]), float(self.position[1]))
+
+        if not walls.contains(point):
+            return
+
+        nearest_self, nearest_wall = nearest_points(point, walls.boundary)
+
+        nearest = np.array(
+            [nearest_wall.x, nearest_wall.y],
+            dtype=float,
+        )
+
+        diff = self.position - nearest
+        norm = np.linalg.norm(diff)
+
+        if norm < 1e-8:
+            # 境界上で法線が取れない場合は、現在速度の逆向きへ戻す
+            v_norm = np.linalg.norm(self.velocity)
+            if v_norm < 1e-8:
+                normal = np.array([1.0, 0.0])
+            else:
+                normal = -self.velocity / v_norm
+        else:
+            normal = diff / norm
+
+        # 壁の外へ少し余裕を持って押し出す
+        self.position = nearest + normal * (self.radius + margin)
+
+        # 壁へ向かう速度成分を消す
+        vn = np.dot(self.velocity, normal)
+        if vn < 0:
+            self.velocity -= vn * normal
+
+
 
 
 class SocialForceSimulation:
@@ -1964,6 +2028,15 @@ class SocialForceSimulation:
         }
         self.persons = []
         self.crowd_trj_df = None
+
+        clearance = 0.35  # person radius + margin 相当
+        self.free_area = self.roi_area
+
+        if self.walls is not None:
+            self.free_area = self.roi_area.difference(
+                self.walls.buffer(clearance)
+            )
+
 
     def _sample_boundary_point_and_inward_normal(self):
         """
@@ -2059,6 +2132,8 @@ class SocialForceSimulation:
         -------
 
         """
+        if walls is None:
+            walls = self.walls
         self.persons = []
 
         start_time = self.rng.uniform(
@@ -2096,6 +2171,34 @@ class SocialForceSimulation:
 
             self.persons.append(person)
 
+    def _project_to_free_area(self, person):
+        point = Point(float(person.position[0]), float(person.position[1]))
+
+        if self.free_area.covers(point):
+            return
+
+        _, nearest_free = nearest_points(point, self.free_area)
+
+        new_pos = np.array(
+            [nearest_free.x, nearest_free.y],
+            dtype=float,
+        )
+
+        move_back = new_pos - person.position
+        norm = np.linalg.norm(move_back)
+
+        person.position = new_pos
+
+        # 壁内へ突っ込む速度を弱める
+        if norm > 1e-8:
+            normal = move_back / norm
+            vn = np.dot(person.velocity, normal)
+
+            if vn < 0:
+                person.velocity -= vn * normal
+
+        person.velocity *= 0.3
+
     def step(self, current_time, absolute_time):
         """
         1ステップ分シミュレーションを進める
@@ -2110,6 +2213,7 @@ class SocialForceSimulation:
         -------
         None
         """
+
         for person in self.persons:
             if person.is_finished:
                 continue
@@ -2129,6 +2233,7 @@ class SocialForceSimulation:
                 c_wall=self.sfm_params['c_wall'],
                 r_wall=self.sfm_params['r_wall'],
             )
+            self._project_to_free_area(person)
 
             point = Point(person.position[0], person.position[1])
 
