@@ -5,64 +5,64 @@
     "height": 3.0,
     "max_orders": 0,
     "task_list": {
-        "asphalt/train/roi1_sfm_crowd0601_00": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_00.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_00",
+        "asphalt/train/roi1_sfm_crowd0101_00": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_00.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_00",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_01": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_01.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_01",
+        "asphalt/train/roi1_sfm_crowd0101_01": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_01.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_01",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_02": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_02.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_02",
+        "asphalt/train/roi1_sfm_crowd0101_02": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_02.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_02",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_03": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_03.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_03",
+        "asphalt/train/roi1_sfm_crowd0101_03": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_03.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_03",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_04": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_04.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_04",
+        "asphalt/train/roi1_sfm_crowd0101_04": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_04.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_04",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_05": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_05.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_05",
+        "asphalt/train/roi1_sfm_crowd0101_05": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_05.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_05",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_06": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_06.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_06",
+        "asphalt/train/roi1_sfm_crowd0101_06": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_06.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_06",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_07": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_07.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_07",
+        "asphalt/train/roi1_sfm_crowd0101_07": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_07.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_07",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_08": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_08.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_08",
+        "asphalt/train/roi1_sfm_crowd0101_08": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_08.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_08",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_09": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_09.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_09",
+        "asphalt/train/roi1_sfm_crowd0101_09": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_09.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_09",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_10": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_10.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_10",
+        "asphalt/train/roi1_sfm_crowd0101_10": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_10.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_10",
             "params": {}
         },
-        "asphalt/train/roi1_sfm_crowd0601_11": {
-            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0601_11.csv",
-            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0601_11",
+        "asphalt/train/roi1_sfm_crowd0101_11": {
+            "crowd_csv": "./data/gis/sfm_wall/crowd/asphalt/train/roi1_sfm_crowd0101_11.csv",
+            "output_folder": "./workspace/sim/sfm_wall/monaural/asphalt/train/roi1_sfm_crowd0101_11",
             "params": {}
         }
     }

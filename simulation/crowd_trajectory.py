@@ -51,11 +51,12 @@ def execute_json(config_path):
                 person_num=param.get('person_num', common_param.get('person_num', 100)),
                 start_time=param.get('start_time', common_param.get('start_time', '2024-01-01 00:00:00')),
                 simulation_time=param.get('simulation_time', common_param.get('simulation_time', 100)),
+                goal_flag=param.get('goal_flag', common_param.get('goal_flag', False))
             )
             crowd_trj.to_csv(output_path)
             if 'output_mp4' in param:
                 crowd_trj.create_video(param['output_mp4'], fps=10)
-            logger.info(f"Saved crowd trajectory to {output_path}")
+            logger.info(f'Saved crowd trajectory to {output_path}')
 
 
 

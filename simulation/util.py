@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 from scipy.io import wavfile
 from shapely import wkt
-from shapely.geometry import LineString, Point, Polygon
-from shapely.geometry.multipolygon import MultiPolygon
+from shapely.geometry import LineString, Point, Polygon, MultiPoint, MultiPolygon
+# from shapely.geometry.multipolygon import MultiPolygon
 from shapely.ops import split, nearest_points, orient
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -1922,15 +1922,21 @@ class SocialForcePerson:
         #         # )
 
     def record_trajectory(self, current_time, absolute_time):
-        self.trajectory.append({
+        res = {
             "pid": self.person_id,
             "time": current_time,
             "datetime": absolute_time,
             "x": self.position[0],
             "y": self.position[1],
             "vx": self.velocity[0],
-            "vy": self.velocity[1],
-        })
+            "vy": self.velocity[1]
+        }
+        if self.goal is not None:
+            res |= {
+                "goal_x": self.goal[0],
+                "goal_y": self.goal[1]
+            }
+        self.trajectory.append(res)
 
     def project_out_of_walls(self, walls, margin=0.05):
         if walls is None:
@@ -2084,6 +2090,73 @@ class SocialForceSimulation:
 
         return position, inward_normal
 
+    def _sample_goal_point_from_start(
+            self,
+            start_point: np.ndarray,
+            initial_velocity: np.ndarray,
+            min_d_ratio=0.25
+    ):
+        """
+        目的地の位置を、関心領域の境界上のスタート位置から一定距離以上離れた位置からランダムにサンプリングする
+        Parameters
+        ----------
+        start_point: np.ndarray
+            スタート位置の座標 (x, y)
+        initial_velocity: np.ndarray
+            スタート位置における初期速度ベクトル (vx, vy
+        min_d_ratio: float
+            目的地がスタート位置から少なくともこの割合以上離れるようにするためのパラメータ。0.0以上0.5未満の値を指定する。
+            例えば0.25を指定した場合、目的地はスタート位置から関心領域の外周に沿った距離がスタート位置から外周全体の距離の25%以上、
+            75%以下の位置からランダムにサンプリングされる。
+
+        Returns
+        -------
+        goal_point: Point
+            目的地の座標 (x, y)
+        """
+        start_point = Point(float(start_point[0]), float(start_point[1]))
+        exterior = self.roi_area.exterior
+        if self.walls is None:
+            # 壁がない場合は、スタート位置から初期速度方向へ伸ばした直線と外周の交点を目的地とする
+            ext_len = exterior.length
+            vector_line = LineString(
+                [
+                    (start_point.x, start_point.y),
+                    (start_point.x + initial_velocity[0] * ext_len, start_point.y + initial_velocity[1] * ext_len)
+                ]
+            )
+            vector_line = vector_line.difference(start_point.buffer(0.01))
+            goal_point = exterior.intersection(vector_line)
+            if goal_point.is_empty:
+                raise Exception('Failed to sample goal point: no intersection between vector line and exterior')
+            if isinstance(goal_point, Point):
+                return goal_point.coords[0]
+            elif isinstance(goal_point, MultiPoint):
+                # 複数の交点がある場合は、スタート位置から最も遠い交点を選ぶ
+                max_dist = -1.0
+                selected_point = None
+                for geom in goal_point.geoms:
+                    if isinstance(geom, Point):
+                        dist = start_point.distance(geom)
+                        if dist > max_dist:
+                            max_dist = dist
+                            selected_point = geom
+                if selected_point is not None:
+                    return selected_point.coords[0]
+                else:
+                    raise Exception('Failed to sample goal point: no valid intersection point found')
+            else:
+                raise Exception('Failed to sample goal point: unexpected geometry type for intersection result')
+        else:
+            # 壁がない領域の外周を取得する
+            exterior = exterior.difference(self.walls)
+            ext_len = exterior.length
+            start_ratio = exterior.project(start_point) / ext_len
+            # 外周領域から、スタート位置から一定距離以上離れた位置をランダムにサンプリングする
+            goal_ratio = (start_ratio + min_d_ratio + self.rng.uniform(0, 1 - min_d_ratio * 2)) % 1.0
+            goal_point = exterior.interpolate(goal_ratio * ext_len)
+            return goal_point.coords[0]
+
     def _generate_initial_velocity(self, inward_normal):
         """
         初期速度を生成する。基本的には内向き法線方向に希望速度を持たせるが、ノイズも加える
@@ -2117,7 +2190,8 @@ class SocialForceSimulation:
             self,
             person_num: int,
             simulation_time: float,
-            walls: Polygon | MultiPolygon = None
+            walls: Polygon | MultiPolygon = None,
+            goal_flag: bool = False
     ):
         """
         初期位置を関心領域の境界上からランダムにサンプリングし、初期速度を内向き法線方向に希望速度を持たせて生成する
@@ -2127,6 +2201,10 @@ class SocialForceSimulation:
             発生させるエージェント数
         simulation_time: float
             シミュレーション秒数 [s]
+        walls: Polygon or MultiPolygon or None
+            壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
+        goal_flag: bool
+            目的地を設定するかどうかのフラグ。Trueの場合は、関心領域内のランダムな点を目的地として設定する。Falseの場合は目的地なしとする
 
         Returns
         -------
@@ -2158,14 +2236,14 @@ class SocialForceSimulation:
                         if not walls.contains(point):
                             break
 
-            initial_velocity = self._generate_initial_velocity(inward_normal)
+            ini_vel = self._generate_initial_velocity(inward_normal)
 
             person = SocialForcePerson(
                 person_id=person_id,
                 position=position,
-                initial_velocity=initial_velocity,
+                initial_velocity=ini_vel,
                 start_time=start_time[person_id],
-                goal=None,
+                goal=None if not goal_flag else self._sample_goal_point_from_start(position, ini_vel),
                 desired_speed=self.desired_speed,
             )
 
@@ -2247,17 +2325,23 @@ class SocialForceSimulation:
                 absolute_time=absolute_time,
             )
 
-    def run(self, person_num, simulation_time, start_time):
+    def run(self, person_num, simulation_time, start_time, goal_flag=False):
         """
-        person_num:
+
+        Parameters
+        ----------
+        person_num: int
             発生させるエージェント数
-
-        simulation_time:
+        simulation_time: float
             シミュレーション秒数 [s]
+        start_time: datetime or str
+            シミュレーション開始日時 (datetime型または文字列)
+        goal_flag: bool
+            目的地を設定するかどうかのフラグ。Trueの場合は、関心領域内のランダムな点を目的地として設定する。Falseの場合は目的地なしとする
 
-        start_time:
-            シミュレーション開始日時
-            datetime型または文字列
+        Returns
+        -------
+
         """
 
         if isinstance(start_time, str):
@@ -2267,6 +2351,8 @@ class SocialForceSimulation:
         self._create_persons(
             person_num=person_num,
             simulation_time=simulation_time,
+            walls=self.walls,
+            goal_flag=goal_flag,
         )
         logger.info(f'created {len(self.persons)} persons')
 
@@ -2294,7 +2380,8 @@ class SocialForceSimulation:
             {
                 'id': pid,
                 'start_time': min(grp_df['datetime']),
-                'geom': LineString(grp_df.sort_values(by='datetime')[['x', 'y']].values)
+                'geom': LineString(grp_df.sort_values(by='datetime')[['x', 'y']].values),
+                'goal': Point(grp_df[['goal_x', 'goal_y']].iloc[0]) if 'goal_x' in grp_df.columns and 'goal_y' in grp_df.columns else None
             }
             for pid, grp_df in trajectory_df.groupby('pid') if len(grp_df) > 1
         ]
