@@ -14,7 +14,6 @@ py2shpss
 joblib
 shapely
 geopandas
-psycopg2
 sqlalchemy
 pydantic
 rich
