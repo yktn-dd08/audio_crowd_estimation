@@ -39,7 +39,7 @@ def execute_json(config_path):
             crowd_trj = SocialForceSimulation(
                 roi_polygon=roi_shp,
                 wall=wall_shp,
-                dt=1.0,
+                dt=param.get('dt', common_param.get('dt', 1.0)),
                 desired_speed=param.get('desired_speed', common_param.get('desired_speed', 1.5)),
                 velocity_noise_std=param.get('velocity_noise_std', common_param.get('velocity_noise_std', 0.3)),
                 c_obs=param.get('c_obs', common_param.get('c_obs', 2000.0)),

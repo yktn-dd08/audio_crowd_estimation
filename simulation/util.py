@@ -1420,254 +1420,6 @@ def test():
     return
 
 
-# class SocialForcePerson:
-#     def __init__(
-#             self,
-#             position,
-#             goal=None,
-#             initial_velocity=None,
-#             mass=80.0,
-#             desired_speed=1.3,
-#             relaxation_time=0.5,
-#             radius=0.3,
-#     ):
-#         """
-#         SFMの一人分の移動軌跡を生成するクラス
-#         Parameters
-#         ----------
-#         position: np.ndarray
-#             初期位置 (x, y)
-#         goal: np.ndarray or None
-#             目的地の位置 (x, y)。Noneの場合は目的地なしとする
-#         initial_velocity: np.ndarray or None
-#             初期速度 (vx, vy)。Noneの場合は初期速度なしとする
-#         mass: float
-#             人の質量 (kg)
-#         desired_speed: float
-#             目的地に向かうときの希望速度 (m/s)
-#         relaxation_time: float
-#             目的地に向かうときの加速の速さを表すパラメータ (s)
-#         radius: float
-#             人の半径 (m)
-#         """
-#         self.position = np.array(position, dtype=float)
-#
-#         # 初期速度
-#         if initial_velocity is None:
-#             self.velocity = np.zeros(2, dtype=float)
-#         else:
-#             self.velocity = np.array(initial_velocity, dtype=float)
-#
-#         # 目的地
-#         if goal is None:
-#             self.goal = None
-#         else:
-#             self.goal = np.array(goal, dtype=float)
-#
-#         self.mass = mass
-#         self.desired_speed = desired_speed
-#         self.relaxation_time = relaxation_time
-#         self.radius = radius
-#
-#         self.trajectory = [self.position.copy()]
-#         return
-#
-#     def desired_direction(self):
-#         """
-#         目的地がある場合は目的地に向かう単位ベクトルを返す。ない場合は現在の速度の単位ベクトルを返す。
-#         Returns
-#         -------
-#         result: np.ndarray
-#             目的地がある場合は目的地に向かう単位ベクトル、ない場合は現在の速度の単位ベクトル
-#         """
-#         # goal がある場合
-#         if self.goal is not None:
-#             direction = self.goal - self.position
-#             norm = np.linalg.norm(direction)
-#
-#             if norm < 1e-8:
-#                 return np.zeros(2)
-#
-#             return direction / norm
-#
-#         # goal が無い場合
-#         velocity_norm = np.linalg.norm(self.velocity)
-#
-#         if velocity_norm < 1e-8:
-#             return np.zeros(2)
-#
-#         return self.velocity / velocity_norm
-#
-#     def driving_force(self):
-#         """
-#         Social Force Modelの駆動力を計算する
-#         Returns
-#         -------
-#         result: np.ndarray
-#             駆動力ベクトル
-#         """
-#         desired_velocity = (
-#                 self.desired_speed * self.desired_direction()
-#         )
-#
-#         return (
-#                 self.mass
-#                 * (desired_velocity - self.velocity)
-#                 / self.relaxation_time
-#         )
-#
-#     def interaction_force(self, others, A=2000.0, B=0.08):
-#         """
-#         他の人との相互作用力を計算する
-#         Parameters
-#         ----------
-#         others: list of SocialForcePerson
-#             他の人のリスト
-#         A: float
-#             他の人との距離が0のときの反発力の大きさを表すパラメータ
-#         B: float
-#             他の人との距離が大きくなると反発力が減少する速さを表すパラメータ
-#
-#         Returns
-#         -------
-#
-#         """
-#         force = np.zeros(2)
-#
-#         for other in others:
-#             if other is self:
-#                 continue
-#
-#             diff = self.position - other.position
-#             distance = np.linalg.norm(diff)
-#
-#             if distance < 1e-8:
-#                 continue
-#
-#             direction = diff / distance
-#
-#             combined_radius = (
-#                     self.radius + other.radius
-#             )
-#
-#             repulsive = (
-#                     A
-#                     * np.exp(
-#                 (combined_radius - distance) / B
-#             )
-#                     * direction
-#             )
-#
-#             force += repulsive
-#
-#         return force
-#
-#     def wall_force(self, walls, A_wall=2000.0, B_wall=0.08):
-#         """
-#         壁ポリゴンの境界から最も近い点を探し、その点からエージェントを押し返す反発力を計算する。
-#         Parameters
-#         ----------
-#         walls: MultiPolygon
-#             壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
-#         A_wall: float
-#             壁に近いほど強い反発力の大きさを表すパラメータ
-#         B_wall: float
-#             壁に近いほど強い反発力の減少する速さを表すパラメータ
-#
-#         Returns
-#         -------
-#         result: np.ndarray
-#             壁からの反発力ベクトル
-#         """
-#         if walls is None:
-#             return np.zeros(2)
-#
-#         person_point = Point(float(self.position[0]), float(self.position[1]))
-#
-#         # MultiPolygon全体の境界
-#         wall_boundary = walls.boundary
-#
-#         # 壁境界上の最近傍点
-#         _, nearest_wall_point = nearest_points(person_point, wall_boundary)
-#
-#         nearest = np.array(
-#             [nearest_wall_point.x, nearest_wall_point.y],
-#             dtype=float,
-#         )
-#
-#         diff = self.position - nearest
-#         distance = np.linalg.norm(diff)
-#
-#         if distance < 1e-8:
-#             return np.zeros(2)
-#
-#         direction = diff / distance
-#
-#         # 人の半径を考慮して、壁に近いほど強い反発力
-#         force = A_wall * np.exp((self.radius - distance) / B_wall) * direction
-#
-#         return force
-#
-#     def update(self, dt, others, walls=None):
-#         """
-#         次の時間ステップにおける位置と速度を更新する
-#         Parameters
-#         ----------
-#         dt: float
-#             時間ステップ (s)
-#         others: list of SocialForcePerson
-#             他の人のリスト
-#         walls: MultiPolygon or None
-#             壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
-#
-#         Returns
-#         -------
-#
-#         """
-#         total_force = self.driving_force()
-#         total_force += self.interaction_force(others)
-#         total_force += self.wall_force(walls)
-#
-#         acceleration = total_force / self.mass
-#
-#         self.velocity += acceleration * dt
-#         self.position += self.velocity * dt
-#
-#         # もしpositionがwalls内に入ってしまったら、wallsの境界上の最近傍点にpositionを移動させる
-#         if walls is not None:
-#             person_point = Point(float(self.position[0]), float(self.position[1]))
-#             if walls.contains(person_point):
-#                 wall_boundary = walls.boundary
-#                 _, nearest_wall_point = nearest_points(person_point, wall_boundary)
-#                 self.position = np.array(
-#                     [nearest_wall_point.x, nearest_wall_point.y],
-#                     dtype=float,
-#                 )
-#
-#         self.trajectory.append(self.position.copy())
-#
-# class SocialForceSimulation:
-#     def __init__(self, persons, walls=None, dt=1.0):
-#         """
-#         SFMのシミュレーションを実行するクラス
-#         Parameters
-#         ----------
-#         persons: list of SocialForcePerson
-#             シミュレーションする人のリスト
-#         walls: MultiPolygon or None
-#             壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
-#         dt: float
-#             時間ステップ (s)
-#         """
-#         self.persons = persons
-#         self.walls = walls
-#         self.dt = dt
-#         self.time = 0.0
-#         return
-#
-#
-
-
 class SocialForcePerson:
     def __init__(
         self,
@@ -1719,6 +1471,12 @@ class SocialForcePerson:
         self.radius = radius
 
         self.trajectory = []
+
+        # stuck判定用: 前回の位置を保存する
+        self.prev_position = self.position.copy()
+        self.stuck_duration = 0.0
+        self.finish_reason = None
+        self.motion_history = []
 
     def desired_direction(self):
         """
@@ -1797,47 +1555,52 @@ class SocialForcePerson:
     def wall_force(
             self,
             walls: Polygon | MultiPolygon = None,
-            c_wall: float = 2000.0,
-            r_wall: float = 0.08
+            c_wall: float = 500.0,
+            r_wall: float = 0.7,
+            cutoff_distance: float = 3.0,
     ):
-        """
-        壁ポリゴンの境界から最も近い点を探し、その点からエージェントを押し返す反発力を計算する。
-        Parameters
-        ----------
-        walls: Polygon or MultiPolygon or None
-            壁のポリゴン。エージェントはこの壁に当たらないように移動する。Noneの場合は壁なしとする
-        c_wall: float
-            壁に近いほど強い反発力の大きさを表すパラメータ
-        r_wall: float
-            壁に近いほど強い反発力の減少する速さを表すパラメータ
-
-        Returns
-        -------
-        result: np.ndarray
-            壁からの反発力ベクトル
-        """
         if walls is None:
             return np.zeros(2)
 
         point = Point(float(self.position[0]), float(self.position[1]))
-        boundary = walls.boundary
+        total_force = np.zeros(2)
 
-        _, nearest_wall_point = nearest_points(point, boundary)
+        if isinstance(walls, Polygon):
+            wall_polygons = [walls]
+        elif isinstance(walls, MultiPolygon):
+            wall_polygons = list(walls.geoms)
+        else:
+            return total_force
 
-        nearest = np.array(
-            [nearest_wall_point.x, nearest_wall_point.y],
-            dtype=float,
-        )
+        for wall_poly in wall_polygons:
+            boundary_lines = [wall_poly.exterior] + list(wall_poly.interiors)
 
-        diff = self.position - nearest
-        distance = np.linalg.norm(diff)
+            for boundary in boundary_lines:
+                _, nearest_wall_point = nearest_points(point, boundary)
 
-        if distance < 1e-8:
-            return np.zeros(2)
+                nearest = np.array(
+                    [nearest_wall_point.x, nearest_wall_point.y],
+                    dtype=float,
+                )
 
-        direction = diff / distance
+                diff = self.position - nearest
+                distance = np.linalg.norm(diff)
 
-        return c_wall * np.exp((self.radius - distance) / r_wall) * direction
+                if distance < 1e-8:
+                    continue
+
+                if distance > cutoff_distance:
+                    continue
+
+                direction = diff / distance
+
+                force = c_wall * np.exp(
+                    (self.radius - distance) / r_wall
+                ) * direction
+
+                total_force += force
+
+        return total_force
 
     def update(
             self,
@@ -1890,36 +1653,6 @@ class SocialForcePerson:
         self.position += self.velocity * dt
 
         self.project_out_of_walls(walls)
-
-        # もしpositionがwalls内に入ってしまったら、wallsの境界上の最近傍点にpositionを移動させる
-        # if walls is not None:
-        #     person_point = Point(float(self.position[0]), float(self.position[1]))
-        #     if walls.contains(person_point):
-        #         wall_boundary = walls.boundary
-        #         _, nearest_wall_point = nearest_points(person_point, wall_boundary)
-        #
-        #         nearest = np.array(
-        #             [nearest_wall_point.x, nearest_wall_point.y],
-        #             dtype=float,
-        #         )
-        #
-        #         diff = self.position - nearest
-        #         dist = np.linalg.norm(diff)
-        #
-        #         if dist > 1e-8:
-        #             normal = diff / dist
-        #
-        #             # 壁境界上に戻す
-        #             self.position = nearest + normal * self.radius
-        #
-        #             # 壁へ向かう速度成分を消す
-        #             vn = np.dot(self.velocity, normal)
-        #             if vn < 0:
-        #                 self.velocity -= vn * normal
-        #         # self.position = np.array(
-        #         #     [nearest_wall_point.x, nearest_wall_point.y],
-        #         #     dtype=float,
-        #         # )
 
     def record_trajectory(self, current_time, absolute_time):
         res = {
@@ -1976,8 +1709,6 @@ class SocialForcePerson:
             self.velocity -= vn * normal
 
 
-
-
 class SocialForceSimulation:
     def __init__(
         self,
@@ -1990,7 +1721,15 @@ class SocialForceSimulation:
         r_obs: float = 0.08,
         c_wall: float = 2000.0,
         r_wall: float = 0.08,
-        seed=0,
+        stuck_speed_threshold: float = 0.3,
+        stuck_time_threshold: float = 5.0,
+        wall_oscillation_distance: float = 1.0,
+        wall_oscillation_time_window: float = 8.0,
+        wall_oscillation_min_path_length: float = 3.0,
+        wall_oscillation_efficiency_threshold: float = 0.25,
+        wall_oscillation_min_reverse_count: int = 2,
+        wall_oscillation_min_projection_count: int = 2,
+        seed: int = 0,
     ):
         """
         Social Force Modelのシミュレーションを実行するクラス
@@ -2015,6 +1754,22 @@ class SocialForceSimulation:
             壁に近いほど強い反発力の大きさを表すパラメータ
         r_wall: float
             壁に近いほど強い反発力の減少する速さを表すパラメータ
+        stuck_speed_threshold: float
+            stuck判定のための速度閾値。速度がこの値以下で一定時間以上続くとstuckと判定される
+        stuck_time_threshold: float
+            stuck判定のための時間閾値。速度がstuck_speed_threshold以下でこの時間以上続くとstuckと判定される
+        wall_oscillation_distance: float
+            壁振動判定で「壁の近く」とみなす壁からの距離 [m]
+        wall_oscillation_time_window: float
+            壁振動判定に使う直近履歴の時間幅 [s]
+        wall_oscillation_min_path_length: float
+            壁振動判定に必要な直近履歴内の最小移動距離 [m]
+        wall_oscillation_efficiency_threshold: float
+            直近履歴の正味移動距離 / 経路長。この値以下なら往復運動とみなす
+        wall_oscillation_min_reverse_count: int
+            直近履歴内で必要な進行方向反転回数
+        wall_oscillation_min_projection_count: int
+            直近履歴内で必要なfree_areaへの投影回数
         seed: int or None
             乱数シード。Noneの場合はランダムなシードを使用
         """
@@ -2035,6 +1790,15 @@ class SocialForceSimulation:
         self.persons = []
         self.crowd_trj_df = None
 
+        self.stuck_speed_threshold = stuck_speed_threshold
+        self.stuck_time_threshold = stuck_time_threshold
+        self.wall_oscillation_distance = wall_oscillation_distance
+        self.wall_oscillation_time_window = wall_oscillation_time_window
+        self.wall_oscillation_min_path_length = wall_oscillation_min_path_length
+        self.wall_oscillation_efficiency_threshold = wall_oscillation_efficiency_threshold
+        self.wall_oscillation_min_reverse_count = wall_oscillation_min_reverse_count
+        self.wall_oscillation_min_projection_count = wall_oscillation_min_projection_count
+
         clearance = 0.35  # person radius + margin 相当
         self.free_area = self.roi_area
 
@@ -2043,6 +1807,108 @@ class SocialForceSimulation:
                 self.walls.buffer(clearance)
             )
 
+    def _check_stuck(self, person):
+        """
+        連続して stuck_time_threshold 秒以上、移動速度が小さい場合に除外する。
+        """
+
+        displacement = np.linalg.norm(person.position - person.prev_position)
+        speed = displacement / max(self.dt, 1.0e-8)
+
+        if speed < self.stuck_speed_threshold:
+            person.stuck_duration += self.dt
+        else:
+            person.stuck_duration = 0.0
+
+        person.prev_position = person.position.copy()
+
+        if person.stuck_duration >= self.stuck_time_threshold:
+            person.is_active = False
+            person.is_finished = True
+            person.finish_reason = "stuck"
+            return True
+
+        return False
+
+    def _motion_history_limit(self):
+        return max(
+            3,
+            int(math.ceil(self.wall_oscillation_time_window / max(self.dt, 1.0e-8))) + 1,
+        )
+
+    def _append_motion_history(self, person, projected_to_free_area=False):
+        if not hasattr(person, 'motion_history'):
+            person.motion_history = []
+
+        wall_distance = math.inf
+        if self.walls is not None:
+            point = Point(float(person.position[0]), float(person.position[1]))
+            wall_distance = float(self.walls.distance(point))
+
+        person.motion_history.append(
+            {
+                'position': person.position.copy(),
+                'wall_distance': wall_distance,
+                'projected_to_free_area': bool(projected_to_free_area),
+            }
+        )
+
+        max_samples = self._motion_history_limit()
+        if len(person.motion_history) > max_samples:
+            person.motion_history = person.motion_history[-max_samples:]
+
+    def _check_wall_oscillation(self, person):
+        """
+        壁近傍で往復し続けるエージェントを除外する。
+
+        stuck判定は低速停止だけを見るため、速度はあるが同じ壁際を
+        行き来するケースをここで別途検出する。
+        """
+
+        if self.walls is None:
+            return False
+
+        history = getattr(person, 'motion_history', [])
+        min_samples = max(4, min(6, self._motion_history_limit()))
+        if len(history) < min_samples:
+            return False
+
+        positions = np.asarray([sample['position'] for sample in history], dtype=float)
+        wall_distances = np.asarray([sample['wall_distance'] for sample in history], dtype=float)
+        projection_count = sum(sample['projected_to_free_area'] for sample in history)
+
+        near_wall_count = int(np.sum(wall_distances <= self.wall_oscillation_distance))
+        near_wall_required = max(2, len(history) // 2)
+        if (
+            near_wall_count < near_wall_required
+            and projection_count < self.wall_oscillation_min_projection_count
+        ):
+            return False
+
+        diffs = np.diff(positions, axis=0)
+        step_lengths = np.linalg.norm(diffs, axis=1)
+        path_length = float(np.sum(step_lengths))
+        if path_length < self.wall_oscillation_min_path_length:
+            return False
+
+        net_displacement = float(np.linalg.norm(positions[-1] - positions[0]))
+        efficiency = net_displacement / max(path_length, 1.0e-8)
+        if efficiency > self.wall_oscillation_efficiency_threshold:
+            return False
+
+        moving = step_lengths > 1.0e-8
+        if int(np.sum(moving)) < 2:
+            return False
+
+        directions = diffs[moving] / step_lengths[moving, None]
+        reverse_count = int(np.sum(np.sum(directions[:-1] * directions[1:], axis=1) < -0.3))
+        if reverse_count < self.wall_oscillation_min_reverse_count:
+            return False
+
+        person.is_active = False
+        person.is_finished = True
+        person.finish_reason = 'wall_oscillation'
+        return True
 
     def _sample_boundary_point_and_inward_normal(self):
         """
@@ -2253,7 +2119,7 @@ class SocialForceSimulation:
         point = Point(float(person.position[0]), float(person.position[1]))
 
         if self.free_area.covers(point):
-            return
+            return False
 
         _, nearest_free = nearest_points(point, self.free_area)
 
@@ -2276,6 +2142,7 @@ class SocialForceSimulation:
                 person.velocity -= vn * normal
 
         person.velocity *= 0.3
+        return True
 
     def step(self, current_time, absolute_time):
         """
@@ -2311,13 +2178,21 @@ class SocialForceSimulation:
                 c_wall=self.sfm_params['c_wall'],
                 r_wall=self.sfm_params['r_wall'],
             )
-            self._project_to_free_area(person)
+            projected_to_free_area = self._project_to_free_area(person)
+            self._append_motion_history(person, projected_to_free_area)
+
+            if self._check_wall_oscillation(person):
+                continue
+
+            if self._check_stuck(person):
+                continue
 
             point = Point(person.position[0], person.position[1])
 
             if not self.roi_area.contains(point):
                 person.is_active = False
                 person.is_finished = True
+                person.finish_reason = "out_of_roi"
                 continue
 
             person.record_trajectory(
