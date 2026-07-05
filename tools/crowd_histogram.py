@@ -184,7 +184,10 @@ def output_movie(
     )
 
     ax.set_xlim(x_arr[0], x_arr[-1])
-    ax.set_ylim(0, max_count * 1.1 if max_count > 0 else 1)
+    if not log_scale:
+        ax.set_ylim(0, max_count * 1.1 if max_count > 0 else 1)
+    else:
+        ax.set_ylim(0, np.log1p(max_count) * 1.1 if np.log1p(max_count) > 0 else 1)
     ax.set_xlabel("Distance from center point")
     ax.set_ylabel("Crowd count" + "Crowd count (log1p scale)" if log_scale else "")
     ax.set_title("Crowd distance histogram")
