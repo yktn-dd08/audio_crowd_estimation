@@ -1982,6 +1982,52 @@ class SocialForceSimulation:
         """
         start_point = Point(float(start_point[0]), float(start_point[1]))
         exterior = self.roi_area.exterior
+
+        def sample_goal_from_boundary(boundary):
+            boundary_length = boundary.length
+            if boundary_length <= 1.0e-8:
+                raise Exception('Failed to sample goal point: exterior length is zero')
+
+            start_ratio = boundary.project(start_point) / boundary_length
+            goal_ratio = (
+                start_ratio
+                + min_d_ratio
+                + self.rng.uniform(0, 1 - min_d_ratio * 2)
+            ) % 1.0
+            goal_point = boundary.interpolate(goal_ratio * boundary_length)
+            return goal_point.coords[0]
+
+        def farthest_point_from_intersection(intersection):
+            if intersection.is_empty:
+                return None
+
+            candidates = []
+
+            def collect_points(geom):
+                if geom.is_empty:
+                    return
+                if isinstance(geom, Point):
+                    candidates.append(geom)
+                    return
+                if isinstance(geom, MultiPoint):
+                    candidates.extend(list(geom.geoms))
+                    return
+                if isinstance(geom, LineString):
+                    coords = list(geom.coords)
+                    if coords:
+                        candidates.append(Point(coords[0]))
+                        candidates.append(Point(coords[-1]))
+                    return
+                if hasattr(geom, 'geoms'):
+                    for child in geom.geoms:
+                        collect_points(child)
+
+            collect_points(intersection)
+            if not candidates:
+                return None
+
+            return max(candidates, key=lambda point: start_point.distance(point))
+
         if self.walls is None:
             # 壁がない場合は、スタート位置から初期速度方向へ伸ばした直線と外周の交点を目的地とする
             ext_len = exterior.length
@@ -1993,35 +2039,16 @@ class SocialForceSimulation:
             )
             vector_line = vector_line.difference(start_point.buffer(0.01))
             goal_point = exterior.intersection(vector_line)
-            if goal_point.is_empty:
-                raise Exception('Failed to sample goal point: no intersection between vector line and exterior')
-            if isinstance(goal_point, Point):
-                return goal_point.coords[0]
-            elif isinstance(goal_point, MultiPoint):
-                # 複数の交点がある場合は、スタート位置から最も遠い交点を選ぶ
-                max_dist = -1.0
-                selected_point = None
-                for geom in goal_point.geoms:
-                    if isinstance(geom, Point):
-                        dist = start_point.distance(geom)
-                        if dist > max_dist:
-                            max_dist = dist
-                            selected_point = geom
-                if selected_point is not None:
-                    return selected_point.coords[0]
-                else:
-                    raise Exception('Failed to sample goal point: no valid intersection point found')
-            else:
-                raise Exception('Failed to sample goal point: unexpected geometry type for intersection result')
+
+            selected_point = farthest_point_from_intersection(goal_point)
+            if selected_point is not None:
+                return selected_point.coords[0]
+
+            return sample_goal_from_boundary(exterior)
         else:
             # 壁がない領域の外周を取得する
             exterior = exterior.difference(self.walls)
-            ext_len = exterior.length
-            start_ratio = exterior.project(start_point) / ext_len
-            # 外周領域から、スタート位置から一定距離以上離れた位置をランダムにサンプリングする
-            goal_ratio = (start_ratio + min_d_ratio + self.rng.uniform(0, 1 - min_d_ratio * 2)) % 1.0
-            goal_point = exterior.interpolate(goal_ratio * ext_len)
-            return goal_point.coords[0]
+            return sample_goal_from_boundary(exterior)
 
     def _generate_initial_velocity(self, inward_normal):
         """

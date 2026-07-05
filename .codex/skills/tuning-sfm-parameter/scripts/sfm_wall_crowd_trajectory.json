@@ -1,0 +1,20 @@
+{
+    "option": "social_force",
+    "param": {
+        "person_num": 500,
+        "simulation_time": 360,
+        "desired_speed": 1.3,
+        "roi_shp": "./data/gis/sfm/roi/roi1_sfm.shp",
+        "wall_shp": "./data/gis/sfm/wall/wall1_sfm.shp",
+        "goal_flag": true,
+        "dt": 0.1
+    },
+    "task_list": {
+        "sfm_crowd": {
+            "output_csv": "./agent/workspace/manual/template/roi1_sfm_crowd.csv",
+            "output_mp4": "./agent/workspace/manual/template/roi1_sfm_crowd.mp4",
+            "start_time": "2024-01-01 00:00:00",
+            "c_obs": 300.0, "r_obs": 0.3, "c_wall": 500.0, "r_wall": 0.7
+        }
+    }
+}

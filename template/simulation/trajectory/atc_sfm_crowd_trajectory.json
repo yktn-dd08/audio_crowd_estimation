@@ -1,0 +1,111 @@
+{
+    "option": "social_force",
+    "param": {
+        "person_num": 5000,
+        "simulation_time": 3600,
+        "desired_speed": 1.3,
+        "roi_shp": "./data/gis/atc_sfm/roi/atc_roi1_sfm.shp",
+        "wall_shp": "./data/gis/atc_sfm/wall/atc_wall1_sfm.shp",
+        "goal_flag": true,
+        "dt": 1.0
+    },
+    "task_list": {
+        "sfm_crowd0101_00": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_00.csv",
+            "_output_mp4": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_00.mp4",
+            "start_time": "2024-01-01 00:00:00",
+            "c_obs": 480.0,
+            "r_obs": 0.52,
+            "c_wall": 160.0,
+            "r_wall": 0.3
+        },
+        "sfm_crowd0101_01": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_01.csv",
+            "start_time": "2024-01-01 01:00:00",
+            "c_obs": 520.0,
+            "r_obs": 0.52,
+            "c_wall": 200.0,
+            "r_wall": 0.38
+        },
+        "sfm_crowd0101_02": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_02.csv",
+            "start_time": "2024-01-01 02:00:00",
+            "c_obs": 520.0,
+            "r_obs": 0.4,
+            "c_wall": 240.0,
+            "r_wall": 0.34
+        },
+        "sfm_crowd0101_03": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_03.csv",
+            "start_time": "2024-01-01 03:00:00",
+            "c_obs": 440.0,
+            "r_obs": 0.56,
+            "c_wall": 220.0,
+            "r_wall": 0.42
+        },
+        "sfm_crowd0101_04": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_04.csv",
+            "start_time": "2024-01-01 04:00:00",
+            "c_obs": 600.0,
+            "r_obs": 0.4,
+            "c_wall": 160.0,
+            "r_wall": 0.3
+        },
+        "sfm_crowd0101_05": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_05.csv",
+            "start_time": "2024-01-01 05:00:00",
+            "c_obs": 600.0,
+            "r_obs": 0.48,
+            "c_wall": 180.0,
+            "r_wall": 0.34
+        },
+        "sfm_crowd0101_06": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_06.csv",
+            "start_time": "2024-01-01 06:00:00",
+            "c_obs": 480.0,
+            "r_obs": 0.4,
+            "c_wall": 180.0,
+            "r_wall": 0.34
+        },
+        "sfm_crowd0101_07": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_07.csv",
+            "start_time": "2024-01-01 07:00:00",
+            "c_obs": 520.0,
+            "r_obs": 0.44,
+            "c_wall": 180.0,
+            "r_wall": 0.34
+        },
+        "sfm_crowd0101_08": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_08.csv",
+            "start_time": "2024-01-01 08:00:00",
+            "c_obs": 560.0,
+            "r_obs": 0.44,
+            "c_wall": 240.0,
+            "r_wall": 0.34
+        },
+        "sfm_crowd0101_09": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_09.csv",
+            "start_time": "2024-01-01 09:00:00",
+            "c_obs": 660.0,
+            "r_obs": 0.52,
+            "c_wall": 160.0,
+            "r_wall": 0.3
+        },
+        "sfm_crowd0101_10": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_10.csv",
+            "start_time": "2024-01-01 10:00:00",
+            "c_obs": 440.0,
+            "r_obs": 0.4,
+            "c_wall": 160.0,
+            "r_wall": 0.3
+        },
+        "sfm_crowd0101_11": {
+            "output_csv": "./data/gis/atc_sfm/crowd/org/roi1_atc_sfm_crowd0101_11.csv",
+            "start_time": "2024-01-01 11:00:00",
+            "c_obs": 560.0,
+            "r_obs": 0.56,
+            "c_wall": 180.0,
+            "r_wall": 0.34
+        }
+    }
+}
