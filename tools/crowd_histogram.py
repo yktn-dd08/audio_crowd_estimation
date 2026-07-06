@@ -13,6 +13,7 @@ from common.logger import get_logger
 
 
 logger = get_logger('tools.crowd_histogram')
+DISTANCE_CAND = [0, 1, 2, 3, 4, 5, 10, 20, 50, 100, 200, 500, 1000]
 
 def decompose_linestring(
         data_row: pd.Series,
@@ -130,8 +131,8 @@ def histogram_with_distance(
             for tl in time_list
         ]
     )
-    if log_scale:
-        hist_df['histogram'] = hist_df['histogram'].apply(lambda x: np.log1p(x))
+    # if log_scale:
+    #     hist_df['histogram'] = hist_df['histogram'].apply(lambda x: np.log1p(x))
     return hist_df, x_arr
 
 
@@ -165,13 +166,10 @@ def output_movie(
     max_count = hist_df['histogram'].apply(
         lambda h: np.max(h) if len(h) > 0 else 0
     ).max()
-    if log_scale:
-        max_count = np.expm1(max_count)
+    # if log_scale:
+    #     max_count = np.expm1(max_count)
     # 目盛り候補
-    candidates = np.array([0, 1, 2, 5,
-                           10, 20, 50,
-                           100, 200, 500,
-                           1000])
+    candidates = np.array(DISTANCE_CAND)
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -184,10 +182,11 @@ def output_movie(
     )
 
     ax.set_xlim(x_arr[0], x_arr[-1])
-    if not log_scale:
-        ax.set_ylim(0, max_count * 1.1 if max_count > 0 else 1)
-    else:
-        ax.set_ylim(0, np.log1p(max_count) * 1.1 if np.log1p(max_count) > 0 else 1)
+    ax.set_ylim(0, max_count * 1.1 if max_count > 0.0 else 1.0)
+    # if not log_scale:
+    #     ax.set_ylim(0, max_count * 1.1 if max_count > 0 else 1)
+    # else:
+    #     ax.set_ylim(0, np.log1p(max_count) * 1.1 if np.log1p(max_count) > 0 else 1)
     ax.set_xlabel("Distance from center point")
     ax.set_ylabel("Crowd count" + "Crowd count (log1p scale)" if log_scale else "")
     ax.set_title("Crowd distance histogram")
@@ -195,11 +194,11 @@ def output_movie(
 
     ax.set_xticks(major_ticks)
     ax.set_xticklabels([str(int(x)) for x in major_ticks])
-    if log_scale:
-        y_ticks = candidates[candidates <= max_count]
-
-        ax.set_yticks(np.log1p(y_ticks))
-        ax.set_yticklabels([str(v) for v in y_ticks])
+    # if log_scale:
+    #     y_ticks = candidates[candidates <= max_count]
+    #
+    #     ax.set_yticks(np.log1p(y_ticks))
+    #     ax.set_yticklabels([str(v) for v in y_ticks])
 
     ax.grid(True, axis="y", alpha=0.3)
 
@@ -279,7 +278,7 @@ def output_boxplot(
         hist_matrix,
         positions=bin_centers,
         widths=np.diff(x_arr) * 0.7,
-        showfliers=False
+        showfliers=True
     )
 
     ax.set_xlim(x_arr[0], x_arr[-1])
@@ -295,10 +294,7 @@ def output_boxplot(
         max_count = np.expm1(max_count)
 
         # 目盛り候補
-        candidates = np.array([0, 1, 2, 5,
-                               10, 20, 50,
-                               100, 200, 500,
-                               1000])
+        candidates = np.array(DISTANCE_CAND)
 
         y_ticks = candidates[candidates <= max_count]
 
@@ -313,6 +309,33 @@ def output_boxplot(
     os.makedirs(dir_name, exist_ok=True)
     fig.savefig(output_png, dpi=300)
     plt.close(fig)
+    return
+
+
+def output_mean_histogram(
+        hist_df: pd.DataFrame,
+        x_arr: np.ndarray,
+        output_png: str,
+        log_scale: bool = True
+):
+    """
+    ヒストグラムの平均値の棒グラフを出力する。
+    Parameters
+    ----------
+    hist_df: pd.DataFrame
+        A DataFrame containing 'time' and 'histogram' (counts per distance bin) for each time interval.
+    x_arr: np.ndarray
+        An array of distance bin edges.
+    output_png: str
+        Path to the output PNG file.
+    log_scale: bool
+        Whether to apply log1p transformation to the histogram counts.
+
+    Returns
+    -------
+    None
+    """
+    
     return
 
 
