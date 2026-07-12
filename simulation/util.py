@@ -891,97 +891,153 @@ class PersonTrajectory:
             start_point: Point = None,
             v: float = 1.0,
             v_sigma: float = 0.0,
-            dir_sigma: float = None
+            dir_sigma: float = None,
+            walls: Polygon | MultiPolygon = None,
+            start_buffer: float = 0.05,
+            wall_clearance: float = 0.05,
+            max_direction_trials: int = 30,
     ):
-        """
-        一人分の移動軌跡を生成するクラス
-        壁反射なしの単純なランダムウォークで生成する
-        Parameters
-        ----------
-        pid
-        room_polygon
-        start_time
-        start_point
-        v
-        v_sigma
-        dir_sigma
-        """
+        """壁を考慮した一人分のランダムウォーク軌跡を生成する。"""
         self.pid = pid
         self.start_time = start_time
         self.duration = duration
         self.room_polygon = room_polygon
-        self.start_point = start_point if start_point is not None else self.__get_random_point_from_room_edge()
+        self.walls = walls
+        self.start_buffer = start_buffer
+        self.wall_clearance = wall_clearance
+        self.max_direction_trials = max_direction_trials
         self.v = v
         self.v_sigma = v_sigma
         self.dir_sigma = math.pi / 8 if dir_sigma is None else dir_sigma
+        self.start_point = (
+            start_point if start_point is not None
+            else self.__get_random_point_from_room_edge()
+        )
         self.trajectory = None
-        return
 
-    def __get_random_point_from_room_edge(self, buffer=0.01):
-        """
-        room_polygonの外周からランダムに点を選ぶ
-        Parameters
-        ----------
-        buffer: float
-            外周からの距離。正の値なら外周から内側に、負の値なら外周から外側に点が選ばれる
-        Returns
-        -------
-        result: Point
-        """
-        line_string = self.room_polygon.buffer(distance=-buffer).exterior
-        total_length = line_string.length
-        random_length = random.uniform(0, total_length)
-        return line_string.interpolate(random_length)
+    def __is_in_wall(self, point: Point) -> bool:
+        if self.walls is None:
+            return False
+        return self.walls.buffer(self.wall_clearance).covers(point)
 
-    def __get_direction_from_point(self, point):
-        """
-        入力された点から部屋の中心に向かう方向を計算する
-        Parameters
-        ----------
-        point: Point
-            入力点
-        Returns
-        -------
-        result: float
-            部屋の中心に向かう方向（ラジアン）
-        """
+    def __segment_hits_wall(self, p1: Point, p2: Point) -> bool:
+        if self.walls is None:
+            return False
+        movement = LineString([p1, p2])
+        return movement.intersects(self.walls.buffer(self.wall_clearance))
+
+    def __get_random_point_from_room_edge(self) -> Point:
+        """ROI外周の内側から、壁と重ならない開始点をランダムに選ぶ。"""
+        inner_polygon = self.room_polygon.buffer(-self.start_buffer)
+        if inner_polygon.is_empty:
+            raise ValueError('start_bufferが大きすぎるため、開始点を生成できません。')
+
+        if isinstance(inner_polygon, MultiPolygon):
+            polygons = list(inner_polygon.geoms)
+            lengths = np.asarray([poly.exterior.length for poly in polygons], dtype=float)
+            probabilities = lengths / lengths.sum()
+        else:
+            polygons = [inner_polygon]
+            probabilities = np.asarray([1.0])
+
+        for _ in range(1000):
+            polygon = random.choices(polygons, weights=probabilities, k=1)[0]
+            boundary = polygon.exterior
+            point = boundary.interpolate(random.uniform(0.0, boundary.length))
+            if not self.__is_in_wall(point):
+                return point
+
+        raise RuntimeError('ROI外周上に壁と交差しない開始点を生成できませんでした。')
+
+    def __get_direction_from_point(self, point: Point) -> float:
         room_center = self.room_polygon.centroid
         return math.atan2(room_center.y - point.y, room_center.x - point.x)
 
+    def __find_initial_direction(self, current_point: Point) -> float:
+        base_direction = self.__get_direction_from_point(current_point)
+        probe_distance = max(self.v * 5.0, self.start_buffer * 2.0)
+
+        for _ in range(self.max_direction_trials):
+            direction = random.gauss(base_direction, math.pi / 16.0)
+            probe = Point(
+                current_point.x + probe_distance * math.cos(direction),
+                current_point.y + probe_distance * math.sin(direction),
+            )
+            if (
+                self.room_polygon.contains(probe)
+                and not self.__is_in_wall(probe)
+                and not self.__segment_hits_wall(current_point, probe)
+            ):
+                return direction
+
+        # 長いプローブが通らない狭い通路向けに、一歩分で再試行する。
+        for _ in range(self.max_direction_trials):
+            direction = random.gauss(base_direction, math.pi / 8.0)
+            probe = Point(
+                current_point.x + self.v * math.cos(direction),
+                current_point.y + self.v * math.sin(direction),
+            )
+            if (
+                self.room_polygon.contains(probe)
+                and not self.__is_in_wall(probe)
+                and not self.__segment_hits_wall(current_point, probe)
+            ):
+                return direction
+
+        return base_direction
+
     def generate_trajectory(self, time_step=1.0, simulation_total_time=3600.0):
         current_point = self.start_point
-        # current_dir = random.uniform(0, 2 * math.pi)
-        current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 16.0)
-        while not self.room_polygon.contains(
-                Point(
-                    current_point.x + self.v * 5 * math.cos(current_dir),
-                    current_point.y + self.v * 5 * math.sin(current_dir)
-                )
-        ):
-            current_dir = random.gauss(self.__get_direction_from_point(current_point), math.pi / 16.0)
+        current_dir = self.__find_initial_direction(current_point)
         history = [(self.start_time, current_point, current_dir)]
         duration = simulation_total_time - self.start_time if self.duration is None else self.duration
-        idx = 0
-        for t in np.arange(self.start_time + time_step, self.start_time + duration, time_step):
-            # 速度と方向にランダムノイズを加える
-            v_t = max(0.0, random.gauss(self.v, self.v_sigma))
-            # 最初だけは方向にノイズを加えない（点が部屋の外に行く可能性があるため）
-            dir_t = random.gauss(current_dir, self.dir_sigma) if idx > 0 else current_dir
-            # 次の点を計算する
-            new_x = current_point.x + v_t * time_step * math.cos(dir_t)
-            new_y = current_point.y + v_t * time_step * math.sin(dir_t)
-            new_point = Point(new_x, new_y)
 
-            current_point = new_point
-            current_dir = dir_t
+        for idx, t in enumerate(np.arange(
+                self.start_time + time_step,
+                self.start_time + duration,
+                time_step,
+        )):
+            v_t = max(0.0, random.gauss(self.v, self.v_sigma))
+            candidate_point = None
+            candidate_dir = current_dir
+
+            for _ in range(self.max_direction_trials):
+                dir_t = current_dir if idx == 0 else random.gauss(current_dir, self.dir_sigma)
+                new_point = Point(
+                    current_point.x + v_t * time_step * math.cos(dir_t),
+                    current_point.y + v_t * time_step * math.sin(dir_t),
+                )
+
+                # ROI外へ出る移動は許可し、その時点で軌跡を終了する。
+                if not self.room_polygon.contains(new_point):
+                    if not self.__segment_hits_wall(current_point, new_point):
+                        candidate_point = new_point
+                        candidate_dir = dir_t
+                        break
+                    continue
+
+                if self.__is_in_wall(new_point):
+                    continue
+                if self.__segment_hits_wall(current_point, new_point):
+                    continue
+
+                candidate_point = new_point
+                candidate_dir = dir_t
+                break
+
+            if candidate_point is None:
+                # 壁に囲まれて候補が得られない場合は、その場に留まって方向を変更する。
+                candidate_point = current_point
+                candidate_dir = random.uniform(0.0, 2.0 * math.pi)
+
+            current_point = candidate_point
+            current_dir = candidate_dir
             history.append((t, current_point, current_dir))
-            idx += 1
-            if not self.room_polygon.contains(new_point):
-                # 部屋の外に出たら終了
+
+            if not self.room_polygon.contains(current_point):
                 break
 
         self.trajectory = LineString([h[1] for h in history])
-        return
 
 
 class PersonTrajectoryOld:
@@ -1095,7 +1151,8 @@ class CrowdTrajectory:
     def __init__(
             self,
             room_polygon: Polygon = None,
-            room_size = 100
+            room_size=100,
+            walls: Polygon | MultiPolygon = None,
     ):
         self.crowd_trj_df = None
         self.person_trajectories = []
@@ -1105,6 +1162,7 @@ class CrowdTrajectory:
                           (room_size/2, -room_size/2),
                           (-room_size/2, -room_size/2))
         self.room_polygon = Polygon(default_coords) if room_polygon is None else room_polygon
+        self.walls = walls
         logger.debug(f'CrowdTrajectory initialized with room polygon: {self.room_polygon}')
         return
 
@@ -1169,7 +1227,8 @@ class CrowdTrajectory:
                 room_polygon=self.room_polygon,
                 v=v+random.gauss(0, 0.1),
                 v_sigma=v_sigma,
-                dir_sigma=math.pi / dir_division
+                dir_sigma=math.pi / dir_division,
+                walls=self.walls,
             )
             self.person_trajectories.append(person_trajectory)
 
@@ -1301,6 +1360,12 @@ class CrowdTrajectory:
         # room polygon
         room_x, room_y = self.room_polygon.exterior.xy
         ax.plot(room_x, room_y, color='black', linewidth=1.5)
+
+        if self.walls is not None:
+            wall_geoms = [self.walls] if isinstance(self.walls, Polygon) else list(self.walls.geoms)
+            for wall_poly in wall_geoms:
+                wx, wy = wall_poly.exterior.xy
+                ax.fill(wx, wy, facecolor='gray', edgecolor='black', alpha=0.5, zorder=1)
 
         minx, miny, maxx, maxy = self.room_polygon.bounds
         pad_x = max((maxx - minx) * 0.05, 1.0e-6)

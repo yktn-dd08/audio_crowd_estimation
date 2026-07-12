@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
+from alembic.operations.toimpl import drop_index
 from tqdm import tqdm
 from datetime import timedelta
 from shapely.geometry import LineString, Point
@@ -136,6 +137,52 @@ def histogram_with_distance(
     return hist_df, x_arr
 
 
+def calculate_histogram_index(
+        distance_list: list,
+        threshold: float = 3.0
+):
+    target_list = [1.0 / d**2 for d in distance_list if 0 < d <= threshold]
+    noise_list = [1.0 / d**2 for d in distance_list if d > threshold]
+    target_index = sum(target_list) / len(target_list) if len(target_list) > 0 else 0.0
+    noise_index = sum(noise_list) / len(noise_list) if len(noise_list) > 0 else 0.0
+    return target_index, noise_index
+
+
+def index_histogram(
+        trj_df: pd.DataFrame,
+        center_point: Point,
+        time_bin: int = 1,
+        threshold: float = 3.0
+):
+    g_df = pd.DataFrame(
+        [
+            {
+                'time': t,
+                'geom': grp_df['geom'].tolist(),
+                'distance': [center_point.distance(p) for p in grp_df['geom'].tolist()],
+            }
+            for t, grp_df in trj_df.groupby('time')
+        ]
+    )
+    g_df['target_index'], g_df['noise_index'] = zip(*g_df['distance'].apply(
+        lambda x: calculate_histogram_index(x, threshold=threshold)
+    ))
+    time_list = g_df['time'].tolist()
+    hist_df = pd.DataFrame(
+        [
+            {
+                'time': tl,
+                'noise_index': g_df[(g_df['time'] >= tl) &
+                                     (g_df['time'] < tl + timedelta(seconds=time_bin))]['noise_index'].sum() / time_bin,
+                'target_index': g_df[(g_df['time'] >= tl) &
+                                     (g_df['time'] < tl + timedelta(seconds=time_bin))]['target_index'].sum() / time_bin
+            }
+            for tl in time_list
+        ]
+    )
+    return hist_df
+
+
 def output_movie(
         hist_df: pd.DataFrame,
         x_arr: np.ndarray,
@@ -155,6 +202,8 @@ def output_movie(
         Path to the output MP4 file.
     log_scale: bool
         Whether the histogram counts are in log scale.
+    fps: int
+        Frames per second for the output video.
 
     Returns
     -------
@@ -249,7 +298,8 @@ def output_boxplot(
         hist_df: pd.DataFrame,
         x_arr: np.ndarray,
         output_png: str,
-        log_scale: bool = True
+        log_scale: bool = True,
+        remove_zero: bool = True,
 ):
     """
     ヒストグラムデータを箱ひげ図として出力する。
@@ -263,12 +313,20 @@ def output_boxplot(
         Path to the output PNG file.
     log_scale: bool
         Whether to apply log1p transformation to the histogram counts.
+    remove_zero: bool
+        Whether to remove zero counts from the histogram before plotting.
 
     Returns
     -------
     None
     """
-    hist_matrix = np.vstack(hist_df['histogram'].values)
+    if remove_zero:
+        hist_df_ = hist_df[hist_df['histogram'].apply(lambda x: np.any(x > 0))].reset_index(drop=True)
+    else:
+        hist_df_ = hist_df
+    if log_scale:
+        hist_df_['histogram'] = hist_df_['histogram'].apply(lambda x: np.log1p(x))
+    hist_matrix = np.vstack(hist_df_['histogram'].values)
 
     bin_centers = (x_arr[:-1] + x_arr[1:]) / 2
 
@@ -278,7 +336,8 @@ def output_boxplot(
         hist_matrix,
         positions=bin_centers,
         widths=np.diff(x_arr) * 0.7,
-        showfliers=True
+        meanline=True,
+        showfliers=True,
     )
 
     ax.set_xlim(x_arr[0], x_arr[-1])
@@ -316,7 +375,8 @@ def output_mean_histogram(
         hist_df: pd.DataFrame,
         x_arr: np.ndarray,
         output_png: str,
-        log_scale: bool = True
+        log_scale: bool = True,
+        remove_zero: bool = True,
 ):
     """
     ヒストグラムの平均値の棒グラフを出力する。
@@ -330,12 +390,61 @@ def output_mean_histogram(
         Path to the output PNG file.
     log_scale: bool
         Whether to apply log1p transformation to the histogram counts.
-
+    remove_zero: bool
+        Whether to remove zero counts from the histogram before plotting.
     Returns
     -------
     None
     """
-    
+    if remove_zero:
+        hist_df_ = hist_df[hist_df['histogram'].apply(lambda x: np.any(x > 0))].reset_index(drop=True)
+    else:
+        hist_df_ = hist_df
+    if log_scale:
+        hist_df_['histogram'] = hist_df_['histogram'].apply(lambda x: np.log1p(x))
+    mean_hist = np.mean(np.vstack(hist_df_['histogram'].values), axis=0)
+
+    # 棒グラフを作成
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.bar(
+        x_arr[:-1],
+        mean_hist,
+        width=np.diff(x_arr),
+        align='edge',
+        edgecolor='black'
+    )
+    ax.set_xlim(x_arr[0], x_arr[-1])
+    ax.set_xlabel("Distance from center point")
+    ax.set_ylabel("Crowd count" + (" (log1p scale)" if log_scale else ""))
+    ax.set_title("Crowd count distribution by distance bin")
+    major_ticks = np.arange(0, x_arr[-1] + 0.1, 5)
+
+    ax.set_xticks(major_ticks)
+    ax.set_xticklabels([str(int(x)) for x in major_ticks])
+    if log_scale:
+        max_count = mean_hist.max()
+        max_count = np.expm1(max_count)
+
+        # 目盛り候補
+        candidates = np.array(DISTANCE_CAND)
+
+        y_ticks = candidates[candidates <= max_count]
+        # 値が小さくて目盛りが1つしかない場合は、最大値を基準に目盛りを作る
+        if len(y_ticks) < 2:
+            max_range = 10 ** int(np.log10(max_count))
+            y_ticks = [j / 5.0 * max_range for j in range(6)]
+
+        ax.set_yticks(np.log1p(y_ticks))
+        ax.set_yticklabels([str(v) for v in y_ticks])
+
+    ax.grid(True, axis="y", alpha=0.3)
+
+
+    fig.tight_layout()
+    dir_name = os.path.dirname(output_png)
+    os.makedirs(dir_name, exist_ok=True)
+    fig.savefig(output_png, dpi=300)
+    plt.close(fig)
     return
 
 
@@ -344,6 +453,7 @@ def make_histogram_anime(
         shp_path: str,
         output_mp4: str,
         dist_range: tuple = (0, 30),
+        distance_bin: float = 0.5,
         log_scale: bool = True
 ):
     logger.info(f"Reading trajectory CSV from {csv_path}")
@@ -357,17 +467,17 @@ def make_histogram_anime(
         trj_df=trj_df,
         center_point=center_geom,
         dist_range=dist_range,
-        distance_bin=0.5,
+        distance_bin=distance_bin,
         time_bin=1,
         log_scale=log_scale
     )
 
     logger.info(f"Output movie to {output_mp4}")
-    output_movie(
-        hist_df=hist_df,
-        x_arr=x_arr,
-        output_mp4=output_mp4
-    )
+    # output_movie(
+    #     hist_df=hist_df,
+    #     x_arr=x_arr,
+    #     output_mp4=output_mp4
+    # )
     boxplot_png = output_mp4.replace('.mp4', '_boxplot.png')
     logger.info(f"Output boxplot to {boxplot_png}")
     output_boxplot(
@@ -376,11 +486,44 @@ def make_histogram_anime(
         output_png=boxplot_png,
         log_scale=log_scale
     )
+    mean_hist_png = output_mp4.replace('.mp4', '_mean_histogram.png')
+    logger.info(f"Output mean histogram to {mean_hist_png}")
+    output_mean_histogram(
+        hist_df=hist_df,
+        x_arr=x_arr,
+        output_png=mean_hist_png,
+        log_scale=log_scale
+    )
+    return
+
+
+def make_index_histogram(
+        csv_path: str,
+        shp_path: str,
+        output_folder: str,
+        time_bin: int = 1,
+        threshold: float = 3.0
+):
+    logger.info(f"Reading trajectory CSV from {csv_path}")
+    trj_df = read_trajectory_csv(csv_path)
+
+    logger.info(f"Reading center point from {shp_path}")
+    center_geom = gpd.read_file(shp_path).geometry[0]
+
+    logger.info(f"Calculating index histogram")
+    hist_df = index_histogram(
+        trj_df=trj_df,
+        center_point=center_geom,
+        time_bin=time_bin,
+        threshold=threshold
+    )
     return
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Crowd Histogram')
+    parser.add_argument('-opt', '--option', type=str, default='anime',
+                        choices=['anime', 'index'],)
     parser.add_argument('-i', '--input_csv', type=str, required=True,
                         help='Input CSV file path')
     parser.add_argument('-s', '--center_shp', type=str, required=True,
@@ -399,10 +542,16 @@ if __name__ == '__main__':
                         help='Time bin width for histogram (seconds)')
     args = parser.parse_args()
 
-    make_histogram_anime(
-        csv_path=args.input_csv,
-        shp_path=args.center_shp,
-        dist_range=args.dist_range,
-        output_mp4=args.output_mp4,
-        log_scale=(args.log1p == 'True'),
-    )
+    if args.option == 'anime':
+        make_histogram_anime(
+            csv_path=args.input_csv,
+            shp_path=args.center_shp,
+            dist_range=args.dist_range,
+            output_mp4=args.output_mp4,
+            distance_bin=args.distance_bin,
+            log_scale=(args.log1p == 'True'),
+        )
+    elif args.option == 'index':
+        pass
+    else:
+        pass

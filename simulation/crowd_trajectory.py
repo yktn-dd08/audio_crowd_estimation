@@ -10,13 +10,15 @@ def execute_json(config_path):
         cfg = json.load(f)
     option = cfg['option']
     common_param = cfg['param']
-    if option == 'crowd_trajectory':
+    if option == 'random':
         for task, param in cfg['task_list'].items():
             logger.info(f"Executing task: {task}")
             output_path = param['output_csv']
             roi_path = param.get('roi_shp', common_param.get('roi_shp', None))
             roi_shp = gpd.read_file(roi_path).geometry[0] if roi_path else None
-            crowd_trj = CrowdTrajectory(room_polygon=roi_shp)
+            wall_path = param.get('wall_shp', common_param.get('wall_shp', None))
+            wall_shp = gpd.read_file(wall_path).geometry.union_all() if wall_path else None
+            crowd_trj = CrowdTrajectory(room_polygon=roi_shp, walls=wall_shp)
             crowd_trj.set_crowd_trajectory(
                 person_num=param.get('person_num', common_param.get('person_num', 100)),
                 start_time=param.get('start_time', common_param.get('start_time', 0)),
@@ -27,6 +29,8 @@ def execute_json(config_path):
                 datetime_str=param.get('datetime_str', common_param.get('datetime_str', '2024-01-01 00:00:00'))
             )
             crowd_trj.to_csv(output_path)
+            if 'output_mp4' in param:
+                crowd_trj.create_video(param['output_mp4'], fps=param.get('fps', 10))
             logger.info(f"Saved crowd trajectory to {output_path}")
     elif option == 'social_force':
         for task, param in cfg['task_list'].items():
