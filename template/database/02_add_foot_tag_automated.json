@@ -1,0 +1,9 @@
+{
+    "option": "foot_tag_all",
+    "foot_tag_json": "./template/foottag/foottag_template_train.json",
+    "param": {
+        "path": "./data/gis/rec_rnd/crowd/org/*.csv",
+        "folder_before": "org",
+        "folder_after": "asphalt/train"
+    }
+}

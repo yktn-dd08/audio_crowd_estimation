@@ -171,23 +171,42 @@ def execute_json(json_path):
     common_output = config.get('output', None)
     common_config_json = config.get('config_json', './footstep_config.json')
     common_foot_tag_json = config.get('foot_tag_json', None)
-    task_list = config['task_list']
-    for task_name, task_config in task_list.items():
-        logger.info(f'Execute task: {task_name}')
-        if option == 'segment':
-            footstep_segmentation(
-                config_json=task_config.get('config_json', common_config_json),
-                input_folder=task_config.get('input', common_input),
-                output_folder=task_config.get('output', common_output)
-            )
-        elif option == 'foot_tag':
+    if option == 'foot_tag_all':
+        file_list = glob.glob(config['param']['path'])
+        folder_before = config['param']['folder_before']
+        folder_after = config['param']['folder_after']
+        for file_path in file_list:
+            file_name = os.path.basename(file_path)
+            output_path = file_path.replace(f'/{folder_before}/', f'/{folder_after}/')
+            logger.info(f'Add foot tag to {file_name} and save to {output_path}')
+            if os.path.exists(output_path):
+                logger.info(f'Output file {output_path} already exists. Skipping.')
+                continue
             add_foot_tag(
-                input_csv=task_config.get('input', common_input),
-                output_csv=task_config.get('output', common_output),
-                config_json=task_config.get('config_json', common_config_json),
-                foot_tag_json=task_config.get('foot_tag_json', common_foot_tag_json)
+                input_csv=file_path,
+                output_csv=output_path,
+                config_json=common_config_json,
+                foot_tag_json=common_foot_tag_json
             )
-    logger.info(f'{len(task_list)} tasks are completed.')
+        logger.info(f'{len(file_list)} files are completed.')
+    else:
+        task_list = config['task_list']
+        for task_name, task_config in task_list.items():
+            logger.info(f'Execute task: {task_name}')
+            if option == 'segment':
+                footstep_segmentation(
+                    config_json=task_config.get('config_json', common_config_json),
+                    input_folder=task_config.get('input', common_input),
+                    output_folder=task_config.get('output', common_output)
+                )
+            elif option == 'foot_tag':
+                add_foot_tag(
+                    input_csv=task_config.get('input', common_input),
+                    output_csv=task_config.get('output', common_output),
+                    config_json=task_config.get('config_json', common_config_json),
+                    foot_tag_json=task_config.get('foot_tag_json', common_foot_tag_json)
+                )
+        logger.info(f'{len(task_list)} tasks are completed.')
     return
 
 
