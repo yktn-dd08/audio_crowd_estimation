@@ -9,11 +9,15 @@ def execute_json(config_path):
     with open(config_path, 'r') as f:
         cfg = json.load(f)
     option = cfg['option']
+    overwrite = cfg.get('overwrite', False)
     common_param = cfg['param']
     if option == 'random':
         for task, param in cfg['task_list'].items():
             logger.info(f"Executing task: {task}")
             output_path = param['output_csv']
+            if os.path.exists(output_path) and not overwrite:
+                logger.info(f"Output file {output_path} already exists. Skipping task.")
+                continue
             roi_path = param.get('roi_shp', common_param.get('roi_shp', None))
             roi_shp = gpd.read_file(roi_path).geometry[0] if roi_path else None
             wall_path = param.get('wall_shp', common_param.get('wall_shp', None))
@@ -36,6 +40,9 @@ def execute_json(config_path):
         for task, param in cfg['task_list'].items():
             logger.info(f"Executing task: {task}")
             output_path = param['output_csv']
+            if os.path.exists(output_path) and not overwrite:
+                logger.info(f"Output file {output_path} already exists. Skipping task.")
+                continue
             roi_path = param.get('roi_shp', common_param.get('roi_shp', None))
             roi_shp = gpd.read_file(roi_path).geometry[0] if roi_path else None
             wall_path = param.get('wall_shp', common_param.get('wall_shp', None))

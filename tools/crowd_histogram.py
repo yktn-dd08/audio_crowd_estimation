@@ -137,6 +137,62 @@ def histogram_with_distance(
     return hist_df, x_arr
 
 
+def histogram_split_by_threshold(
+        trj_df: pd.DataFrame,
+        center_point: Point,
+        threshold: float = 3.0,
+        time_bin: int = 1,
+):
+    """
+    各時刻の点の距離を計算し、距離ごとの密度分布を作成する。
+    Parameters
+    ----------
+    trj_df: pd.DataFrame
+        A DataFrame containing 'time' and 'geom' (Point) for each point in the trajectory.
+    center_point: Point
+        The reference point from which distances are calculated.
+    threshold: float
+        The distance threshold to split the histogram into two parts (target and noise).
+    time_bin: int
+        The time interval (in seconds) over which to aggregate the histogram counts.
+
+    Returns
+    -------
+    pd.DataFrame, np.ndarray
+        A DataFrame containing 'time' and 'histogram' (counts per distance bin) for each time interval,
+        and an array of distance bin edges.
+    """
+    g_df = pd.DataFrame(
+        [
+            {
+                'time': t,
+                'geom': grp_df['geom'].tolist(),
+                'distance': [center_point.distance(p) for p in grp_df['geom'].tolist()],
+            }
+            for t, grp_df in trj_df.groupby('time')
+        ]
+    )
+    g_df['target_count'] = g_df['distance'].apply(
+        lambda x: len([d for d in x if d <= threshold])
+    )
+    g_df['noise_count'] = g_df['distance'].apply(
+        lambda x: len([d for d in x if d > threshold])
+    )
+    time_list = g_df['time'].tolist()
+    hist_df = pd.DataFrame(
+        [
+            {
+                'time': tl,
+                'noise_count': g_df[(g_df['time'] >= tl) &
+                                    (g_df['time'] < tl + timedelta(seconds=time_bin))]['noise_count'].sum() / time_bin,
+                'target_count': g_df[(g_df['time'] >= tl) &
+                                     (g_df['time'] < tl + timedelta(seconds=time_bin))]['target_count'].sum() / time_bin
+            }
+            for tl in time_list
+        ]
+    )
+    return hist_df
+
 def calculate_histogram_index(
         distance_list: list,
         threshold: float = 3.0
@@ -520,16 +576,278 @@ def make_index_histogram(
     return
 
 
+def output_simple_density(
+        hist_df: pd.DataFrame,
+        output_png: str,
+        column_list: list = None,
+        log_scale: bool = True,
+        x_lim: tuple = None,
+        y_lim: tuple = None,
+):
+    """target/noiseカウントの同時確率分布と周辺分布を出力する。
+
+    中央に2次元ヒストグラムから求めた同時確率分布のヒートマップと
+    観測値の散布図を重ね、上側と右側に各変数の周辺ヒストグラムを描画する。
+
+    Parameters
+    ----------
+    hist_df : pd.DataFrame
+        描画対象の2列を含むDataFrame。
+    output_png : str
+        出力PNGファイルのパス。
+    column_list : list[str], optional
+        [x軸の列名, y軸の列名]。既定値は
+        ['noise_count', 'target_count']。
+    log_scale : bool
+        Trueの場合、各カウントにlog1p変換を適用して描画する。
+    x_lim : tuple[float, float], optional
+        X軸の表示範囲。log_scale=Trueの場合も実際のカウント値で指定する。
+    y_lim : tuple[float, float], optional
+        Y軸の表示範囲。log_scale=Trueの場合も実際のカウント値で指定する。
+
+    Returns
+    -------
+    None
+    """
+    if column_list is None:
+        column_list = ['noise_count', 'target_count']
+
+    if len(column_list) != 2:
+        raise ValueError("column_list must contain exactly two column names")
+
+    x_col, y_col = column_list
+    missing_columns = [c for c in column_list if c not in hist_df.columns]
+    if missing_columns:
+        raise KeyError(f"Columns not found in hist_df: {missing_columns}")
+
+    plot_df = hist_df[[x_col, y_col]].replace([np.inf, -np.inf], np.nan).dropna()
+    if plot_df.empty:
+        raise ValueError("No finite data are available for output_simple_density")
+
+    x_raw = plot_df[x_col].to_numpy(dtype=float)
+    y_raw = plot_df[y_col].to_numpy(dtype=float)
+    if np.any(x_raw < 0) or np.any(y_raw < 0):
+        raise ValueError("Count values must be non-negative")
+
+    def validate_limit(limit, name):
+        if limit is None:
+            return None
+        if len(limit) != 2:
+            raise ValueError(f"{name} must contain exactly two values")
+        lower, upper = map(float, limit)
+        if lower < 0 or upper <= lower:
+            raise ValueError(f"{name} must satisfy 0 <= min < max")
+        return lower, upper
+
+    x_lim = validate_limit(x_lim, 'xlim')
+    y_lim = validate_limit(y_lim, 'ylim')
+
+    if log_scale:
+        x = np.log1p(x_raw)
+        y = np.log1p(y_raw)
+        plot_x_lim = tuple(np.log1p(x_lim)) if x_lim is not None else None
+        plot_y_lim = tuple(np.log1p(y_lim)) if y_lim is not None else None
+    else:
+        x = x_raw
+        y = y_raw
+        plot_x_lim = x_lim
+        plot_y_lim = y_lim
+
+    # データ数に応じてbin数を決める。極端に細かくならないよう上限を設ける。
+    n_samples = len(plot_df)
+    n_bins = int(np.clip(np.sqrt(n_samples), 10, 50))
+
+    # 値が一定の場合でもhistogram2dが計算できるよう、描画範囲を少し広げる。
+    def make_range(values: np.ndarray):
+        value_min = float(np.min(values))
+        value_max = float(np.max(values))
+        if np.isclose(value_min, value_max):
+            margin = max(abs(value_min) * 0.05, 0.5)
+            return value_min - margin, value_max + margin
+        margin = (value_max - value_min) * 0.03
+        return value_min - margin, value_max + margin
+
+    x_range = plot_x_lim if plot_x_lim is not None else make_range(x)
+    y_range = plot_y_lim if plot_y_lim is not None else make_range(y)
+
+    joint_count, x_edges, y_edges = np.histogram2d(
+        x,
+        y,
+        bins=n_bins,
+        range=[x_range, y_range],
+    )
+    total_count = joint_count.sum()
+    if total_count == 0:
+        raise ValueError(
+            'No observations fall within the specified xlim and ylim'
+        )
+    joint_probability = joint_count / total_count
+
+    fig = plt.figure(figsize=(10, 9))
+    grid = fig.add_gridspec(
+        2,
+        2,
+        width_ratios=(4, 1),
+        height_ratios=(1, 4),
+        left=0.10,
+        right=0.90,
+        bottom=0.10,
+        top=0.90,
+        wspace=0.05,
+        hspace=0.05,
+    )
+    ax_hist_x = fig.add_subplot(grid[0, 0])
+    ax_joint = fig.add_subplot(grid[1, 0], sharex=ax_hist_x)
+    ax_hist_y = fig.add_subplot(grid[1, 1], sharey=ax_joint)
+
+    mesh = ax_joint.pcolormesh(
+        x_edges,
+        y_edges,
+        joint_probability.T,
+        shading='auto',
+        cmap='viridis',
+    )
+    ax_joint.scatter(
+        x,
+        y,
+        s=12,
+        alpha=0.25,
+        edgecolors='none',
+        label='Observations',
+    )
+
+    # 周辺分布も総和が1になるよう、各サンプルに1/Nの重みを付ける。
+    weights = np.full(n_samples, 1.0 / n_samples)
+    ax_hist_x.hist(
+        x,
+        bins=x_edges,
+        weights=weights,
+        edgecolor='black',
+        linewidth=0.4,
+    )
+    ax_hist_y.hist(
+        y,
+        bins=y_edges,
+        weights=weights,
+        orientation='horizontal',
+        edgecolor='black',
+        linewidth=0.4,
+    )
+
+    ax_joint.set_xlabel(x_col)
+    ax_joint.set_ylabel(y_col)
+
+    if plot_x_lim is not None:
+        ax_joint.set_xlim(plot_x_lim)
+    if plot_y_lim is not None:
+        ax_joint.set_ylim(plot_y_lim)
+
+    if log_scale:
+        def set_count_ticks(axis, raw_limit, observed_values, is_x_axis):
+            if raw_limit is None:
+                lower = 0.0
+                upper = float(np.max(observed_values))
+            else:
+                lower, upper = raw_limit
+
+            # 表示範囲が狭い場合は、実カウント値を1刻みで表示する。
+            # 広い場合は、ラベルが過密にならないよう代表値だけ表示する。
+            if upper - lower <= 20:
+                ticks_raw = np.arange(
+                    np.ceil(lower),
+                    np.floor(upper) + 1,
+                    dtype=float,
+                )
+            else:
+                candidates = np.asarray(DISTANCE_CAND, dtype=float)
+                ticks_raw = candidates[(candidates >= lower) & (candidates <= upper)]
+
+            # xlim/ylimの端点は表示範囲としてのみ使用し、目盛りには強制追加しない。
+            # これにより39.2や6.2のような端数の最大値が目盛りに現れるのを防ぐ。
+            ticks_raw = np.unique(ticks_raw)
+
+            # 候補が1つもない場合だけ、表示範囲内の整数値を補助的に使う。
+            if len(ticks_raw) == 0:
+                first_tick = int(np.ceil(lower))
+                last_tick = int(np.floor(upper))
+                if first_tick <= last_tick:
+                    ticks_raw = np.arange(first_tick, last_tick + 1, dtype=float)
+                else:
+                    ticks_raw = np.array([lower], dtype=float)
+
+            ticks_plot = np.log1p(ticks_raw)
+            labels = [f'{v:g}' for v in ticks_raw]
+
+            if is_x_axis:
+                axis.set_xticks(ticks_plot)
+                axis.set_xticklabels(labels)
+            else:
+                axis.set_yticks(ticks_plot)
+                axis.set_yticklabels(labels)
+
+        set_count_ticks(ax_joint, x_lim, x_raw, True)
+        set_count_ticks(ax_joint, y_lim, y_raw, False)
+    ax_joint.grid(True, alpha=0.2)
+
+    ax_hist_x.set_ylabel('Probability')
+    ax_hist_y.set_xlabel('Probability')
+    ax_hist_x.tick_params(axis='x', labelbottom=False)
+    ax_hist_y.tick_params(axis='y', labelleft=False)
+
+    colorbar = fig.colorbar(mesh, ax=[ax_joint, ax_hist_x, ax_hist_y], pad=0.02)
+    colorbar.set_label('Joint probability')
+    fig.suptitle(f'Joint probability distribution: {x_col} vs {y_col}')
+
+    output_dir = os.path.dirname(output_png)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    fig.savefig(output_png, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    return
+
+
+def make_simple_density(
+        csv_path: str,
+        shp_path: str,
+        output_folder: str,
+        time_bin: int = 1,
+        threshold: float = 3.0,
+        log_scale: bool = True,
+):
+    logger.info(f"Reading trajectory CSV from {csv_path}")
+    trj_df = read_trajectory_csv(csv_path)
+
+    logger.info(f"Reading center point from {shp_path}")
+    center_geom = gpd.read_file(shp_path).geometry[0]
+
+    logger.info(f"Calculating simple histogram")
+    hist_df = histogram_split_by_threshold(
+        trj_df=trj_df,
+        center_point=center_geom,
+        threshold=threshold,
+        time_bin=time_bin
+    )
+
+    logger.info(f'Output simple histogram to {output_folder}')
+    output_simple_density(
+        hist_df=hist_df,
+        output_png=os.path.join(output_folder, 'simple_density.png'),
+        log_scale=log_scale
+    )
+    return
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Crowd Histogram')
     parser.add_argument('-opt', '--option', type=str, default='anime',
-                        choices=['anime', 'index'],)
+                        choices=['anime', 'index', 'simple'],)
     parser.add_argument('-i', '--input_csv', type=str, required=True,
                         help='Input CSV file path')
     parser.add_argument('-s', '--center_shp', type=str, required=True,
                         help='Input SHP file path for center point')
     parser.add_argument('-o', '--output_mp4', type=str, default=None,
                         help='Output MP4 file path')
+    parser.add_argument('-of', '--output_folder', type=str, default=None,)
     parser.add_argument('-l', '--log1p', type=str, default='True', choices=['True', 'False'],
                         help='Apply log1p to histogram counts')
     parser.add_argument('-dt', '--delta_t', type=float, default=1.0,
@@ -540,6 +858,7 @@ if __name__ == '__main__':
                         help='Distance bin width for histogram')
     parser.add_argument('-tb', '--time_bin', type=int, default=5,
                         help='Time bin width for histogram (seconds)')
+    parser.add_argument('-th', '--threshold', type=float, default=3.0,)
     args = parser.parse_args()
 
     if args.option == 'anime':
@@ -553,5 +872,14 @@ if __name__ == '__main__':
         )
     elif args.option == 'index':
         pass
+    elif args.option == 'simple':
+        make_simple_density(
+            csv_path=args.input_csv,
+            shp_path=args.center_shp,
+            output_folder=args.output_folder,
+            time_bin=args.time_bin,
+            threshold=args.threshold,
+            log_scale=(args.log1p == 'True'),
+        )
     else:
         pass

@@ -1,0 +1,85 @@
+{
+    "option": "random",
+    "param": {
+        "person_num": 5000,
+        "start_time": 0,
+        "end_time": 3600,
+        "v": 1.3,
+        "roi_shp": "./data/gis/rec_rnd/roi/roi1_rec_sfm.shp",
+        "dt": 1.0
+    },
+    "task_list": {
+        "rec_rnd_crowd0101_01": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_01.csv",
+            "datetime_str": "2024-01-01 01:00:00",
+            "dir_division": 8,
+            "v_sigma": 0.3
+        },
+        "rec_rnd_crowd0101_02": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_02.csv",
+            "datetime_str": "2024-01-01 02:00:00",
+            "dir_division": 4,
+            "v_sigma": 0.3
+        },
+        "rec_rnd_crowd0101_03": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_03.csv",
+            "datetime_str": "2024-01-01 03:00:00",
+            "dir_division": 2,
+            "v_sigma": 0.3
+        },
+        "rec_rnd_crowd0101_04": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_04.csv",
+            "datetime_str": "2024-01-01 04:00:00",
+            "dir_division": 8,
+            "v_sigma": 0.2
+        },
+        "rec_rnd_crowd0101_05": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_05.csv",
+            "datetime_str": "2024-01-01 05:00:00",
+            "dir_division": 4,
+            "v_sigma": 0.2
+        },
+        "rec_rnd_crowd0101_06": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_06.csv",
+            "datetime_str": "2024-01-01 06:00:00",
+            "dir_division": 2,
+            "v_sigma": 0.2
+        },
+        "rec_rnd_crowd0101_07": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_07.csv",
+            "datetime_str": "2024-01-01 07:00:00",
+            "dir_division": 8,
+            "v_sigma": 0.1
+        },
+        "rec_rnd_crowd0101_08": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_08.csv",
+            "datetime_str": "2024-01-01 08:00:00",
+            "dir_division": 4,
+            "v_sigma": 0.1
+        },
+        "rec_rnd_crowd0101_09": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_09.csv",
+            "datetime_str": "2024-01-01 09:00:00",
+            "dir_division": 2,
+            "v_sigma": 0.1
+        },
+        "rec_rnd_crowd0101_10": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_10.csv",
+            "datetime_str": "2024-01-01 10:00:00",
+            "dir_division": 8,
+            "v_sigma": 0.0
+        },
+        "rec_rnd_crowd0101_11": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_11.csv",
+            "datetime_str": "2024-01-01 11:00:00",
+            "dir_division": 4,
+            "v_sigma": 0.0
+        },
+        "rec_rnd_crowd0101_12": {
+            "output_csv": "./data/gis/rec_rnd/crowd/org/roi1_rec_rnd_crowd0101_12.csv",
+            "datetime_str": "2024-01-01 12:00:00",
+            "dir_division": 2,
+            "v_sigma": 0.0
+        }
+    }
+}

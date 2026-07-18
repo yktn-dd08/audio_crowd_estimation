@@ -93,6 +93,7 @@ def footstep_simulation_task(config_path):
     with open(config_path, 'r') as f:
         cfg = json.load(f)
     task_list = cfg['task_list']
+    overwrite = cfg.get('overwrite', False)
     # Get common parameters
     common_roi_shp = cfg.get('roi_shp', None)
     common_mic_shp = cfg.get('mic_shp', None)
@@ -104,8 +105,14 @@ def footstep_simulation_task(config_path):
     common_height = cfg.get('height', 3.0)
     common_max_order = cfg.get('max_order', 0)
 
+    task_num = 0
     for task_name, task_cfg in task_list.items():
         logger.info(f'[task name]: {task_name}')
+
+        signal_info_path = os.path.join(task_cfg['output_folder'], 'signal_info.json')
+        if os.path.exists(signal_info_path) and not overwrite:
+            logger.info(f"Output file {signal_info_path} already exists. Skipping task.")
+            continue
         audio_crowd_simulation(
             crowd_csv=task_cfg['crowd_csv'],
             output_folder=task_cfg['output_folder'],
@@ -120,7 +127,8 @@ def footstep_simulation_task(config_path):
             height=task_cfg.get('params', {}).get('height', common_height),
             max_order=task_cfg.get('params', {}).get('max_order', common_max_order)
         )
-    logger.info(f'{len(task_list)} tasks are completed.')
+        task_num += 1
+    logger.info(f'{task_num} tasks are completed.')
 
 
 if __name__ == '__main__':
