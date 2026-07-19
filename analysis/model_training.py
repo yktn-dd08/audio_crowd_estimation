@@ -1617,7 +1617,7 @@ def audio_crowd_tuning_multichannel(
 
 def copy_json(json_path, model_folder):
     json_name = os.path.basename(json_path)
-    shutil.copyfile(args.input_config_json, f'{model_folder}/{json_name}')
+    shutil.copyfile(json_path, f'{model_folder}/{json_name}')
     logger.info(f'Copied input json for model param: {model_folder}/{json_name}')
     return
 
