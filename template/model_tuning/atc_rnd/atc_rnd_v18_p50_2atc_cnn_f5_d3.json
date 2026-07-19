@@ -1,0 +1,60 @@
+{
+    "train": {
+        "input_folder_list": [
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_01",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_02",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_03",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_04",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_05",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_06",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_07",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_08",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_09",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_10",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_11",
+            "./workspace/sim/atc_rnd/monaural/asphalt/train/roi1_atc_rnd_v18_p50_crowd0101_12"
+        ],
+        "valid_folder_list": [
+            "./workspace/sim/atc/monaural/asphalt/test/roi1_crowd1031_14"
+        ],
+        "model_folder": "./workspace/model/train/asphalt/atc_rnd_v18_p50_2atc_SimpleCNN2",
+        "model_name": "SimpleCNN2",
+        "target": [
+            "distance_3"
+        ],
+        "batch_size": 64,
+        "n_trials": 500,
+        "model_param": {
+            "time_sec": 5,
+            "frame_num": 501,
+            "freq_num": 64,
+            "layer_num": 3,
+            "kernel_size": [
+                9,
+                23,
+                23
+            ],
+            "dilation_size": [
+                3,
+                1,
+                1
+            ],
+            "inter_ch": [
+                16,
+                13,
+                12
+            ],
+            "pool_size": [
+                2,
+                1,
+                1
+            ],
+            "lr": 1e-05,
+            "weight_decay": 0.0,
+            "criterion": "MAE"
+        },
+        "epoch": 200,
+        "log_scale": true,
+        "time_agg": true
+    }
+}

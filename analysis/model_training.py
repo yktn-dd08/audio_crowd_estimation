@@ -1017,7 +1017,10 @@ def load_model_setting(model_name, model_param, target_num, finetune=None):
 
 def audio_crowd_training(input_folder_list, valid_folder_list,
                          model_folder, model_name, model_param, target, epoch, dev=None,
-                         log_scale=True, time_agg=False, batch_size=64):
+                         log_scale=True, time_agg=False, batch_size=64, overwrite=False):
+    if os.path.exists(f'{model_folder}/{model_name}_model.pt') and not overwrite:
+        logger.info(f'{model_folder}/{model_name}_model.pt already exists. Skipped model training.')
+        return
     device = get_device(dev)
     logger.info(f'Start {model_name} Training: {device} - Columns: {target}')
     logger.info(f' model_folder: {model_folder}')
@@ -1650,7 +1653,8 @@ if __name__ == '__main__':
             dev=dev_,
             batch_size=cf['batch_size'],
             log_scale=cf['log_scale'],
-            time_agg=cf['time_agg']
+            time_agg=cf['time_agg'],
+            overwrite=cf.get('overwrite', False)
         )
         copy_json(args.input_config_json, cf['model_folder'])
 
