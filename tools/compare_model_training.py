@@ -1,6 +1,7 @@
 import argparse
 import glob
 import os
+import re
 import json
 import pandas as pd
 import numpy as np
@@ -17,6 +18,17 @@ def read_folder(folder_path):
     df_list = []
     prefix_list = ['train_acc', 'test_acc']
     for prefix in prefix_list:
+        base_name = os.path.basename(folder_path)
+        base_list = base_name.split('_')
+        velocity = [bl for bl in base_list if re.fullmatch(r"v\d+", bl)]
+        person = [bl for bl in base_list if re.fullmatch(r"p\d+", bl)]
+        base_dict = {
+            'tag': f'{base_list[0]}_{base_list[1]}',
+            'place': base_list[0],
+            'algorithm': base_list[1],
+            'vel': velocity[0] if len(velocity) > 0 else '',
+            'person': person[0] if len(person) > 0 else '',
+        }
         json_list = glob.glob(os.path.join(folder_path, f"{prefix}_*.json"))
         for json_path in json_list:
             postfix = os.path.basename(json_path).split(f"{prefix}_")[1].split('.json')[0]
@@ -26,6 +38,8 @@ def read_folder(folder_path):
             df['condition'] = prefix.replace('_acc', '')
             df['target'] = postfix
             df['json_path'] = json_path
+            for key, value in base_dict.items():
+                df[key] = value
             df_list.append(df)
     dataframes = pd.concat(df_list, ignore_index=True)
     return dataframes
@@ -52,12 +66,18 @@ def merge_result(folder_list, output_path):
     return
 
 
+def merge_result2(glob_path, output_path):
+    folder_list = glob.glob(f'{glob_path}/*')
+    folder_list = [fl for fl in folder_list if os.path.isdir(fl)]
+    merge_result(folder_list, output_path)
+    return
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Merge JSON files from multiple folders into a single CSV file.')
+    parser.add_argument('-g', '--glob-path', type=str)
     parser.add_argument('-i', '--input_json', type=str)
     # parser.add_argument('-f', '--folder_list', nargs='+', help='List of folder paths containing the JSON files to be merged')
-    # parser.add_argument('-o', '--output_path', required=True, help='Path to the output CSV file where the merged results will be saved')
+    parser.add_argument('-o', '--output_path', type=str, help='Path to the output CSV file where the merged results will be saved')
     args = parser.parse_args()
-    with open(args.input_json, 'r') as f:
-        input_data = json.load(f)
-        merge_result(input_data['folder_list'], input_data['output_path'])
+    merge_result2(args.glob_path, args.output_path)
