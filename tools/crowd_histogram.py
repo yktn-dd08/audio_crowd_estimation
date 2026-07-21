@@ -1,10 +1,11 @@
+import glob
+import json
 import os
 import argparse
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
-from alembic.operations.toimpl import drop_index
 from tqdm import tqdm
 from datetime import timedelta
 from shapely.geometry import LineString, Point
@@ -15,6 +16,35 @@ from common.logger import get_logger
 
 logger = get_logger('tools.crowd_histogram')
 DISTANCE_CAND = [0, 1, 2, 3, 4, 5, 10, 20, 50, 100, 200, 500, 1000]
+
+
+def execute_json(json_path):
+    with open(json_path, 'r') as fp:
+        param_json = json.load(fp)
+    opt = param_json['option']
+    param = param_json['param']
+    task_list = param_json['task_list']
+    if opt == 'simple':
+        for task, task_param in task_list.items():
+            logger.info(f'[task name]: {task}')
+            if 'glob_path' in task_param.keys():
+                csv_path = glob.glob(task_param['glob_path'])
+            else:
+                csv_path = task_param['csv_path']
+            make_simple_density(
+                csv_path=csv_path,
+                shp_path=task_param.get('shp_path', param['shp_path']),
+                output_folder=task_param.get('output_folder', param['output_folder']),
+                time_bin=task_param.get('time_bin', param.get('time_bin', 5)),
+                threshold=task_param.get('theshold', param.get('threshold', 3.0)),
+                log_scale=task_param.get('log_scale', param.get('log_scale', True)),
+                x_lim=tuple(task_param.get('x_lim', param.get('x_lim', [0, 30]))),
+                y_lim=tuple(task_param.get('y_lim', param.get('y_lim', [0, 10])))
+            )
+    else:
+        pass
+    return
+
 
 def decompose_linestring(
         data_row: pd.Series,
@@ -68,6 +98,7 @@ def read_trajectory_csv(
     pd.DataFrame
         A DataFrame containing 'id', 'time', and 'geom' (Point) for each decomposed point.
     """
+    logger.info(f'reading trajectory csv: {csv_path}')
     df = pd.read_csv(csv_path)
     df['start_time'] = pd.to_datetime(df['start_time'])
     df['geom'] = df['geom'].apply(lambda x: wkt_loads(x) if isinstance(x, str) else None)
@@ -807,15 +838,21 @@ def output_simple_density(
 
 
 def make_simple_density(
-        csv_path: str,
+        csv_path: str | list[str],
         shp_path: str,
         output_folder: str,
         time_bin: int = 1,
         threshold: float = 3.0,
         log_scale: bool = True,
+        x_lim: tuple = None,
+        y_lim: tuple = None,
 ):
-    logger.info(f"Reading trajectory CSV from {csv_path}")
-    trj_df = read_trajectory_csv(csv_path)
+    logger.info(f"Reading {len(csv_path) if isinstance(csv_path, list) else 1} trajectory CSV files")
+    if isinstance(csv_path, list):
+        trj_df = pd.concat([read_trajectory_csv(cp) for cp in csv_path])
+    else:
+        trj_df = read_trajectory_csv(csv_path)
+    base_name = os.path.basename(csv_path[0]) if isinstance(csv_path, list) else os.path.basename(csv_path)
 
     logger.info(f"Reading center point from {shp_path}")
     center_geom = gpd.read_file(shp_path).geometry[0]
@@ -831,8 +868,10 @@ def make_simple_density(
     logger.info(f'Output simple histogram to {output_folder}')
     output_simple_density(
         hist_df=hist_df,
-        output_png=os.path.join(output_folder, 'simple_density.png'),
-        log_scale=log_scale
+        output_png=os.path.join(output_folder, base_name.replace('.csv', '.png')),
+        log_scale=log_scale,
+        x_lim=x_lim,
+        y_lim=y_lim
     )
     return
 
@@ -840,10 +879,11 @@ def make_simple_density(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Crowd Histogram')
     parser.add_argument('-opt', '--option', type=str, default='anime',
-                        choices=['anime', 'index', 'simple'],)
-    parser.add_argument('-i', '--input_csv', type=str, required=True,
+                        choices=['anime', 'index', 'simple', 'json'],)
+    parser.add_argument('-ic', '--input_config', type=str)
+    parser.add_argument('-i', '--input_csv', type=str,
                         help='Input CSV file path')
-    parser.add_argument('-s', '--center_shp', type=str, required=True,
+    parser.add_argument('-s', '--center_shp', type=str,
                         help='Input SHP file path for center point')
     parser.add_argument('-o', '--output_mp4', type=str, default=None,
                         help='Output MP4 file path')
@@ -881,5 +921,6 @@ if __name__ == '__main__':
             threshold=args.threshold,
             log_scale=(args.log1p == 'True'),
         )
-    else:
+    elif args.option == 'json':
+        execute_json(args.input_config)
         pass
