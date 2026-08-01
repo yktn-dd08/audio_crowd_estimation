@@ -4,6 +4,7 @@ import os.path
 import numpy as np
 import pandas as pd
 from scipy import interpolate
+from tqdm import tqdm
 from sqlalchemy import create_engine, text
 from common.logger import get_logger
 
@@ -28,7 +29,7 @@ def interpolate_people_flow_df(df: pd.DataFrame, dt=0.1):
     """
     logger.info(f'Interpolate people flow data with dt={dt} [s]')
     res_df = pd.DataFrame()
-    for pid, gr_df in df.groupby('pid'):
+    for pid, gr_df in tqdm(df.groupby('pid'), desc='[Progress of PID]'):
         t_org = gr_df['t'].values
         if len(t_org) < 2:
             res_df = pd.concat([res_df, gr_df], axis=0)
@@ -49,7 +50,13 @@ def interpolate_people_flow_df(df: pd.DataFrame, dt=0.1):
     return res_df
 
 
-def store_people_flow(pg_url: str, layout_name: str, df: pd.DataFrame, offset_t: float = 1577836800.0):
+def store_people_flow(
+        pg_url: str,
+        layout_name: str,
+        df: pd.DataFrame,
+        offset_t: float = 1577836800.0,
+        append: bool = True,
+):
     """
     人流データのDataFrameをPostgreSQLに保存する。
 
@@ -72,7 +79,7 @@ def store_people_flow(pg_url: str, layout_name: str, df: pd.DataFrame, offset_t:
     df['t'] = df['t'] + offset_t
     logger.info(f'pg_url: {pg_url}, Copy to {layout_name}_org')
     engine = create_engine(pg_url)
-    df.to_sql(f'{layout_name}_org', engine, if_exists='replace', index=False)
+    df.to_sql(f'{layout_name}_org', engine, if_exists='append' if append else 'replace', index=False)
     sql1 = f'''DROP TABLE IF EXISTS {layout_name}_point;
     SELECT to_timestamp(t::int)::timestamp without time zone AS t, pid AS id, ST_MakePoint(AVG(x), AVG(y)) AS geom
     INTO {layout_name}_point FROM {layout_name}_org GROUP BY t::int, pid;'''

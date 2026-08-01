@@ -29,6 +29,7 @@ def execute_json(json_path):
             logger.info(f'[task name]: {task}')
             if 'glob_path' in task_param.keys():
                 csv_path = glob.glob(task_param['glob_path'])
+                csv_path.sort()
             else:
                 csv_path = task_param['csv_path']
             make_simple_density(

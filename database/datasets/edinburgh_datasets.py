@@ -7,27 +7,25 @@ import pandas as pd
 from common.logger import get_logger
 from database.datasets.common_datasets import interpolate_people_flow_df, store_people_flow
 
-logger = get_logger('database.datasets.gc_datasets')
+logger = get_logger('database.datasets.edinburgh_datasets')
 
 
-def store_gc_datasets(
+def store_edinburgh_datasets(
         pg_url: str,
         layout_name: str,
         input_csv: str,
-        offset_datetime: list[str] = None,
-        # offset_t: float = 1577836800.0
 ):
-    if offset_datetime is None:
-        offset_datetime = ['2011-06-20', '09:00:00']
-    offset_t = datetime.datetime.fromisoformat(' '.join(offset_datetime)).timestamp()
+    if not os.path.basename(input_csv).startswith('edinburgh'):
+        raise Exception(f'CSV file name should be like "edinburgh01Sep.csv" to parse date time information.')
+    date_info = os.path.basename(input_csv).split('.')[0].replace('edinburgh', '')
+    offset_t = pd.to_datetime(f'2010 {date_info} 09:00:00').to_pydatetime().timestamp()
     logger.info(f'reading {input_csv}')
     df = pd.read_csv(input_csv)
     df = df[['timestamp', 'agent_id', 'pos_x', 'pos_y']]
     df.columns = ['t', 'pid', 'x', 'y']
-    # 座標系が逆なため、反転
+    # Y軸のみ座標系が逆なため、反転
     logger.info(f'Reversing x-y coordinates.')
     df['y'] = -df['y']
-    df['x'] = -df['x']
     logger.info(f'Data row: {len(df)}, Data columns: {df.columns}')
 
     df = interpolate_people_flow_df(df, 0.1)
@@ -50,7 +48,7 @@ if __name__ == '__main__':
     _pg_url = f'postgresql://{args.db_user}:{args.db_pw}@{args.db_host}:{args.db_port}/{args.db_name}'
 
     if args.option == 'store':
-        store_gc_datasets(
+        store_edinburgh_datasets(
             pg_url=_pg_url,
             layout_name=args.layout_name,
             input_csv=args.input_csv
