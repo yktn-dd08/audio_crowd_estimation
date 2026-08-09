@@ -163,6 +163,25 @@ def add_foot_tag(input_csv, output_csv, config_json, foot_tag_json):
     return
 
 
+def foot_tag_all(glob_path, folder_before, folder_after, foot_tag_json, config_json='./footstep_config.json'):
+    file_list = glob.glob(glob_path)
+    for file_path in file_list:
+        file_name = os.path.basename(file_path)
+        output_path = file_path.replace(f'/{folder_before}/', f'/{folder_after}/')
+        logger.info(f'Add foot tag to {file_name} and save to {output_path}')
+        if os.path.exists(output_path):
+            logger.info(f'Output file {output_path} already exists. Skipping.')
+            continue
+        add_foot_tag(
+            input_csv=file_path,
+            output_csv=output_path,
+            config_json=config_json,
+            foot_tag_json=foot_tag_json
+        )
+    logger.info(f'{len(file_list)} files are completed.')
+    return
+
+
 def execute_json(json_path):
     with open(json_path, 'r') as f:
         config = json.load(f)
@@ -172,23 +191,25 @@ def execute_json(json_path):
     common_config_json = config.get('config_json', './footstep_config.json')
     common_foot_tag_json = config.get('foot_tag_json', None)
     if option == 'foot_tag_all':
-        file_list = glob.glob(config['param']['path'])
+        # file_list = glob.glob(config['param']['path'])
+        glob_path = config['param']['path']
         folder_before = config['param']['folder_before']
         folder_after = config['param']['folder_after']
-        for file_path in file_list:
-            file_name = os.path.basename(file_path)
-            output_path = file_path.replace(f'/{folder_before}/', f'/{folder_after}/')
-            logger.info(f'Add foot tag to {file_name} and save to {output_path}')
-            if os.path.exists(output_path):
-                logger.info(f'Output file {output_path} already exists. Skipping.')
-                continue
-            add_foot_tag(
-                input_csv=file_path,
-                output_csv=output_path,
-                config_json=common_config_json,
-                foot_tag_json=common_foot_tag_json
-            )
-        logger.info(f'{len(file_list)} files are completed.')
+        foot_tag_all(glob_path, folder_before, folder_after, common_config_json, common_foot_tag_json)
+        # for file_path in file_list:
+        #     file_name = os.path.basename(file_path)
+        #     output_path = file_path.replace(f'/{folder_before}/', f'/{folder_after}/')
+        #     logger.info(f'Add foot tag to {file_name} and save to {output_path}')
+        #     if os.path.exists(output_path):
+        #         logger.info(f'Output file {output_path} already exists. Skipping.')
+        #         continue
+        #     add_foot_tag(
+        #         input_csv=file_path,
+        #         output_csv=output_path,
+        #         config_json=common_config_json,
+        #         foot_tag_json=common_foot_tag_json
+        #     )
+        # logger.info(f'{len(file_list)} files are completed.')
     else:
         task_list = config['task_list']
         for task_name, task_config in task_list.items():

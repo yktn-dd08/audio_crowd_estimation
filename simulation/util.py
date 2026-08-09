@@ -1217,6 +1217,30 @@ class CrowdTrajectory:
             dir_division=8,
             datetime_str='2024-01-01 00:00:00'
     ):
+        """
+        ランダム人流シミュレーションによる人流軌跡を生成する
+        Parameters
+        ----------
+        person_num: int
+            １時間あたりの発生人数
+        start_time: int
+            シミュレーション開始時間（秒）
+        end_time: int
+            シミュレーション終了時間（秒）
+        v: float
+            平均速度（m/s）
+        v_sigma: float
+            速度の標準偏差（m/s）
+        dir_division: int
+            方向の分割数（大きいほど方向の変化が少なくなる）
+        datetime_str: str
+            シミュレーション開始日時（YYYY-MM-DD HH:MM:SS形式）
+
+        Returns
+        -------
+
+        """
+        person_num = int(person_num * (end_time - start_time) / 3600.0)
         for pid in range(person_num):
             each_start_time = int(random.random() * (end_time - start_time) * 0.95 + start_time)
             if pid == 0:
@@ -1233,12 +1257,14 @@ class CrowdTrajectory:
             self.person_trajectories.append(person_trajectory)
 
         logger.info(f'set crowd setting - person num: {person_num}, time range: ({start_time}, {end_time}), v: {v}')
-        sim_total_time = end_time - start_time
+        # sim_total_time = end_time - start_time
         dt = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
         trj_list = []
         pbar = tqdm(total=person_num)
+        # TODO 並列化処理の実装
         for pt in self.person_trajectories:
-            pt.generate_trajectory(simulation_total_time=sim_total_time)
+            # pt.generate_trajectory(simulation_total_time=sim_total_time)
+            pt.generate_trajectory(simulation_total_time=end_time - pt.start_time)
             start_time = dt + timedelta(seconds=pt.start_time)
             line_string = pt.trajectory
             trj_list.append({'id': pt.pid, 'start_time': start_time, 'geom': line_string})
@@ -2298,7 +2324,7 @@ class SocialForceSimulation:
         Parameters
         ----------
         person_num: int
-            発生させるエージェント数
+            １時間あたりに発生させるエージェント数
         simulation_time: float
             シミュレーション秒数 [s]
         start_time: datetime or str
@@ -2313,6 +2339,7 @@ class SocialForceSimulation:
 
         if isinstance(start_time, str):
             start_time = datetime.fromisoformat(start_time)
+        person_num = int(person_num * simulation_time / 3600.0)
 
         logger.info(f'starting simulation - simulation_time: {simulation_time:.2f} sec, start_time: {start_time}')
         self._create_persons(
