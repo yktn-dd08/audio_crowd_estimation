@@ -1,0 +1,4 @@
+interface:
+  display_name: "SFM Parameter Tuning"
+  short_description: "Adaptive SFM tuning with exact-K recommendations"
+  default_prompt: "Use $tuning-sfm-parameter to batch-search SFM parameters and return exactly K recommendations per condition."
