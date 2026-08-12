@@ -5,7 +5,64 @@ import itertools
 import os.path
 
 
-def sfm_trj_json(codex_json, output_json, v_list, p_list):
+def extract_param_from_codex(codex_dict, v, p, scenario_num=12):
+    search_result = codex_dict['results']
+    assert isinstance(search_result, list), "codex_dict['results'] should be a list"
+    ext_sr = {}
+    for sr in search_result:
+        if sr['target_mean_speed'] == v and sr['person_num'] == p:
+            ext_sr = sr
+            break
+    result_list = []
+    for sn in range(scenario_num):
+        pass
+    return
+
+
+def sfm_trj_json(codex_json, setting_param, output_json, v_list, p_list, scenario_num=12):
+    """
+    codexの探索結果をもとに、v_list, p_listの組み合わせで、SFM人流Sim用のJSONを生成する。
+    Parameters
+    ----------
+    codex_json: str
+        必須, codexの探索結果JSONファイルパス
+    setting_param: dict
+        基本パラメータで下記を格納
+        roi_shp: str, 必須, ROIのシェープファイルパス
+        wall_shp: str, 任意, 壁のシェープファイルパス
+        output_folder: str, 必須, 出力フォルダパス
+        tag: str, 任意, 人流シミュレーションのタグ(ex: atc_sfm, gc_sfm, rec_sfm)
+    output_json: str
+        必須, 出力JSONファイルパス
+    v_list: list[float]
+        必須, 速度のリスト
+    p_list: list[int]
+        必須, 人数のリスト
+    scenario_num: int
+        任意, 1つのv, pの組み合わせに関して生成するシナリオ数, デフォルトは12
+
+    Returns
+    -------
+
+    """
+    with open(codex_json, 'r') as f:
+        codex_dict = json.load(f)
+
+    result_dict = {
+        'option': 'social_force',
+        'param': {
+            'simulation_time': 3600,
+            'roi_shp': setting_param['roi_shp'],
+            'wall_shp': setting_param.get('wall_shp', None),
+            'goal_flag': True,
+            'dt': 1.0
+        }
+    }
+    base_tag = setting_param['tag']
+    for v, p in itertools.product(v_list, p_list):
+        vv = f'{int(v * 10):02d}'
+        tag_name = f'{base_tag}_v{vv}_p{p}'
+        idx = 1
     return
 
 
