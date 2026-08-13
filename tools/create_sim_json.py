@@ -6,6 +6,24 @@ import os.path
 
 
 def extract_param_from_codex(codex_dict, v, p, scenario_num=12):
+    """
+    codexの探索結果から、指定したvとpに対応するパラメータを抽出する。
+    Parameters
+    ----------
+    codex_dict: dict
+        codexの探索結果JSONを読み込んだ辞書
+    v: float
+        速度
+    p: int
+        人数
+    scenario_num: int
+        1つのv, pの組み合わせに関して生成するシナリオ数, デフォルトは12
+
+    Returns
+    -------
+    list[dict]
+        抽出されたパラメータのリスト, 各要素は{'c_obs': float, 'r_obs': float, 'c_wall': float, 'r_wall': float}の形式
+    """
     search_result = codex_dict['results']
     assert isinstance(search_result, list), "codex_dict['results'] should be a list"
     ext_sr = {}
@@ -13,10 +31,23 @@ def extract_param_from_codex(codex_dict, v, p, scenario_num=12):
         if sr['target_mean_speed'] == v and sr['person_num'] == p:
             ext_sr = sr
             break
+    if ext_sr == {}:
+        raise ValueError(f"No matching scenario found for v={v} and p={p}")
     result_list = []
+    search_num = len(ext_sr['parameter_sets'])
+    if search_num == 0:
+        raise ValueError(f"No parameter sets found for v={v} and p={p}")
     for sn in range(scenario_num):
-        pass
-    return
+        idx = sn % search_num
+        each_res = {
+            'c_obs': ext_sr['parameter_sets'][idx]['c_obs'],
+            'r_obs': ext_sr['parameter_sets'][idx]['r_obs'],
+        }
+        if 'c_wall' in ext_sr['parameter_sets'][idx] and 'r_wall' in ext_sr['parameter_sets'][idx]:
+            each_res['c_wall'] = ext_sr['parameter_sets'][idx]['c_wall']
+            each_res['r_wall'] = ext_sr['parameter_sets'][idx]['r_wall']
+        result_list.append(each_res)
+    return result_list
 
 
 def sfm_trj_json(codex_json, setting_param, output_json, v_list, p_list, scenario_num=12):
@@ -60,9 +91,29 @@ def sfm_trj_json(codex_json, setting_param, output_json, v_list, p_list, scenari
     }
     base_tag = setting_param['tag']
     for v, p in itertools.product(v_list, p_list):
+        scn_param = extract_param_from_codex(codex_dict, v, p, scenario_num)
         vv = f'{int(v * 10):02d}'
         tag_name = f'{base_tag}_v{vv}_p{p}'
         idx = 1
+        for param in scn_param:
+            task_name = f'{tag_name}_crowd0101_{idx:02d}'
+            task_value = {
+                'output_csv': f"{setting_param['output_folder']}/roi1_{task_name}.csv",
+                'c_obs': param['c_obs'],
+                'r_obs': param['r_obs'],
+                'desired_speed': v,
+                'person_num': p,
+                'start_time': f'2024-01-01 {idx:02d}:00:00'
+            }
+            if 'c_wall' in param.keys() and 'r_wall' in param.keys():
+                task_value['c_wall'] = param['c_wall']
+                task_value['r_wall'] = param['r_wall']
+            result_dict.setdefault('task_list', {})[task_name] = task_value
+            idx += 1
+    folder = os.path.dirname(output_json)
+    os.makedirs(folder, exist_ok=True)
+    with open(output_json, 'w') as f:
+        json.dump(result_dict, f, indent=4)
     return
 
 
