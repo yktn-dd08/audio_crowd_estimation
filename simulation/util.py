@@ -260,7 +260,8 @@ class Crowd:
                           name=str(dr['id']),
                           foot_tag=None if 'foot_tag' not in df.columns else dr['foot_tag'])
                       for _, dr in df.iterrows()]
-
+        avg_vel = sum([cl.path.length / cl.duration for cl in crowd_list]) / len(crowd_list)
+        logger.info(f'[statistical information]: average velocity: {avg_vel} [m/s], number of people: {len(crowd_list)}')
         return crowd_list
 
     def __init__(self, path: LineString,
