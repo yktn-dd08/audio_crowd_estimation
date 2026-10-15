@@ -234,7 +234,7 @@ def audio_json(setting_param, output_json):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-opt', '--option', type=str, choices=['sfm_trj', 'rnd_trj'], required=True)
+    parser.add_argument('-opt', '--option', type=str, choices=['sfm_trj', 'rnd_trj', 'audio'], required=True)
     parser.add_argument('-c', '--codex-json', type=str, help='Input codex JSON file path')
     parser.add_argument('-o', '--output-json', type=str, required=True, help='Output JSON file path')
     parser.add_argument('-v', '--v-list', type=float, nargs='+', required=True, help='List of speeds')
@@ -251,6 +251,12 @@ def main():
         with open(args.setting_json, 'r') as f:
             setting_param = json.load(f)
         rnd_trj_json(setting_param, args.v_list, args.p_list, args.output_json)
+    elif args.option == 'audio':
+        if not args.setting_json:
+            raise ValueError("setting-json is required for audio option")
+        with open(args.setting_json, 'r') as f:
+            setting_param = json.load(f)
+        audio_json(setting_param, args.output_json)
     return
 
 
