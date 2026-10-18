@@ -1622,26 +1622,16 @@ def copy_json(json_path, model_folder):
     return
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-opt', '--option', type=str, choices=[
-        'train', 'predict', 'tuning', 'finetune',
-        'train_multitask', 'predict_multitask', 'tuning_multitask', 'finetune_multitask',
-        'train_multichannel', 'predict_multichannel', 'tuning_multichannel', 'finetune_multichannel'
-    ],)
-    parser.add_argument('-c', '--input-config-json', type=str)
-    parser.add_argument('-d', '--device', type=str, default=None)
-    args = parser.parse_args()
-
-    with open(args.input_config_json, 'r') as f:
+def execute_model_training(config_json_path):
+    with open(config_json_path, 'r') as f:
         cf = json.load(f)
-    opt_ = cf.get('option', args.option)
-    dev_ = cf.get('device', args.device)
+    opt_ = cf.get('option', 'train')
+    dev_ = cf.get('device', None)
     overwrite = cf.get('overwrite', False)
 
     if opt_ == 'train':
         cf = cf['train']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1658,11 +1648,11 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(args.input_config_json, cf['model_folder'])
+        copy_json(config_json_path, cf['model_folder'])
 
     elif opt_ == 'predict':
         cf = cf['predict']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1678,11 +1668,11 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(args.input_config_json, cf['model_folder'])
+        copy_json(config_json_path, cf['model_folder'])
 
     elif opt_ == 'tuning':
         cf = cf['optuna']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1701,11 +1691,11 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(args.input_config_json, cf['model_folder'])
+        copy_json(config_json_path, cf['model_folder'])
 
     elif opt_ == 'finetune':
         cf = cf['finetune']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1723,11 +1713,11 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(args.input_config_json, cf['model_folder'])
+        copy_json(config_json_path, cf['model_folder'])
 
     elif opt_ == 'train_multitask':
         cf = cf['train']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1746,7 +1736,7 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(args.input_config_json, cf['model_folder'])
+        copy_json(config_json_path, cf['model_folder'])
 
     elif opt_ == 'predict_multitask':
         logger.error('multi_predict is not implemented yet.')
@@ -1754,7 +1744,7 @@ def main():
 
     elif opt_ == 'tuning_multitask':
         cf = cf['optuna']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1775,7 +1765,7 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(args.input_config_json, cf['model_folder'])
+        copy_json(config_json_path, cf['model_folder'])
 
     elif opt_ == 'finetune_multitask':
         logger.error('multi_finetune is not implemented yet.')
@@ -1783,7 +1773,7 @@ def main():
 
     elif opt_ == 'train_multichannel':
         cf = cf['train']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1799,14 +1789,15 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
+        copy_json(config_json_path, cf['model_folder'])
 
     elif opt_ == 'tuning_multichannel':
         cf = cf['optuna']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1824,7 +1815,214 @@ def main():
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(args.input_config_json, cf['model_folder'])
+        copy_json(config_json_path, cf['model_folder'])
+    return
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-opt', '--option', type=str, choices=[
+        'train', 'predict', 'tuning', 'finetune',
+        'train_multitask', 'predict_multitask', 'tuning_multitask', 'finetune_multitask',
+        'train_multichannel', 'predict_multichannel', 'tuning_multichannel', 'finetune_multichannel'
+    ],)
+    parser.add_argument('-c', '--input-config-json', type=str)
+    parser.add_argument('-d', '--device', type=str, default=None)
+    args = parser.parse_args()
+    execute_model_training(args.input_config_json)
+
+    # with open(args.input_config_json, 'r') as f:
+    #     cf = json.load(f)
+    # opt_ = cf.get('option', args.option)
+    # dev_ = cf.get('device', args.device)
+    # overwrite = cf.get('overwrite', False)
+    #
+    # if opt_ == 'train':
+    #     cf = cf['train']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_training(
+    #         input_folder_list=cf['input_folder_list'],
+    #         valid_folder_list=cf.get('valid_folder_list', None),
+    #         model_folder=cf['model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         target=cf.get('target', ['count']),
+    #         epoch=cf['epoch'],
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #     copy_json(args.input_config_json, cf['model_folder'])
+    #
+    # elif opt_ == 'predict':
+    #     cf = cf['predict']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_prediction(
+    #         input_folder_list=cf['input_folder_list'],
+    #         output_folder=cf['output_folder'],
+    #         model_folder=cf['model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         target=cf.get('target', ['count']),
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #     copy_json(args.input_config_json, cf['model_folder'])
+    #
+    # elif opt_ == 'tuning':
+    #     cf = cf['optuna']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_tuning(
+    #         input_folder_list=cf['input_folder_list'],
+    #         valid_folder_list=cf.get('valid_folder_list', None),
+    #         model_folder=cf['model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         target=cf.get('target', ['count']),
+    #         epoch=cf['epoch'],
+    #         n_trials=cf.get('n_trials', 1000),
+    #         sampler=cf.get('sampler', 'tpe'),
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #     copy_json(args.input_config_json, cf['model_folder'])
+    #
+    # elif opt_ == 'finetune':
+    #     cf = cf['finetune']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_finetune(
+    #         input_folder_list=cf['input_folder_list'],
+    #         valid_folder_list=cf.get('valid_folder_list', None),
+    #         model_folder=cf['model_folder'],
+    #         pretrain_model_folder=cf['pretrain_model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         target=cf.get('target', ['count']),
+    #         epoch=cf['epoch'],
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #     copy_json(args.input_config_json, cf['model_folder'])
+    #
+    # elif opt_ == 'train_multitask':
+    #     cf = cf['train']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_training_multitask(
+    #         input_folder_list=cf['input_folder_list'],
+    #         valid_folder_list=cf.get('valid_folder_list', None),
+    #         model_folder=cf['model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         target=cf.get('target', ['count']),
+    #         epoch=cf['epoch'],
+    #         weight=cf['weight'],
+    #         tasks=cf['tasks'],
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #     copy_json(args.input_config_json, cf['model_folder'])
+    #
+    # elif opt_ == 'predict_multitask':
+    #     logger.error('multi_predict is not implemented yet.')
+    #     pass
+    #
+    # elif opt_ == 'tuning_multitask':
+    #     cf = cf['optuna']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_tuning_multitask(
+    #         input_folder_list=cf['input_folder_list'],
+    #         valid_folder_list=cf.get('valid_folder_list', None),
+    #         model_folder=cf['model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         target=cf.get('target', ['count']),
+    #         epoch=cf['epoch'],
+    #         n_trials=cf.get('n_trials', 1000),
+    #         sampler=cf.get('sampler', 'tpe'),
+    #         weight=cf['weight'],
+    #         tasks=cf['tasks'],
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #     copy_json(args.input_config_json, cf['model_folder'])
+    #
+    # elif opt_ == 'finetune_multitask':
+    #     logger.error('multi_finetune is not implemented yet.')
+    #     pass
+    #
+    # elif opt_ == 'train_multichannel':
+    #     cf = cf['train']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_training_multichannel(
+    #         input_folder_list=cf['input_folder_list'],
+    #         valid_folder_list=cf.get('valid_folder_list', None),
+    #         model_folder=cf['model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         epoch=cf['epoch'],
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #
+    # elif opt_ == 'tuning_multichannel':
+    #     cf = cf['optuna']
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     model_folder_json = os.path.join(cf['model_folder'], os.path.basename(args.input_config_json))
+    #     if os.path.exists(model_folder_json) and not overwrite:
+    #         logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
+    #         return
+    #     audio_crowd_tuning_multichannel(
+    #         input_folder_list=cf['input_folder_list'],
+    #         valid_folder_list=cf.get('valid_folder_list', None),
+    #         model_folder=cf['model_folder'],
+    #         model_name=cf['model_name'],
+    #         model_param=cf['model_param'],
+    #         epoch=cf['epoch'],
+    #         n_trials=cf.get('n_trials', 1000),
+    #         sampler=cf.get('sampler', 'tpe'),
+    #         dev=dev_,
+    #         batch_size=cf['batch_size'],
+    #         log_scale=cf['log_scale'],
+    #         time_agg=cf['time_agg']
+    #     )
+    #     copy_json(args.input_config_json, cf['model_folder'])
 
 
 if __name__ == '__main__':

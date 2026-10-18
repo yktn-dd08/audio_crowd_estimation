@@ -36,6 +36,14 @@ def apply_env_param(param, env_dict):
                     param[key] = value
                 else:
                     param[key] = value
+            elif isinstance(value, list):
+                new_list = []
+                for item in value:
+                    if isinstance(item, str) and '$' in item:
+                        for env_key, env_value in env_dict.items():
+                            item = item.replace(f'{env_key}', env_value)
+                    new_list.append(item)
+                param[key] = new_list
             else:
                 param[key] = value
     return param
