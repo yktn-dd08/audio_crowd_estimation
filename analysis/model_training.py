@@ -1622,8 +1622,8 @@ def copy_json(json_path, model_folder):
     return
 
 
-def execute_model_training(config_json_path):
-    with open(config_json_path, 'r') as f:
+def execute_model_training(config_path):
+    with open(config_path, 'r') as f:
         cf = json.load(f)
     opt_ = cf.get('option', 'train')
     dev_ = cf.get('device', None)
@@ -1631,7 +1631,7 @@ def execute_model_training(config_json_path):
 
     if opt_ == 'train':
         cf = cf['train']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1648,11 +1648,11 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
 
     elif opt_ == 'predict':
         cf = cf['predict']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1668,11 +1668,11 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
 
     elif opt_ == 'tuning':
         cf = cf['optuna']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1691,11 +1691,11 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
 
     elif opt_ == 'finetune':
         cf = cf['finetune']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1713,11 +1713,11 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
 
     elif opt_ == 'train_multitask':
         cf = cf['train']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1736,7 +1736,7 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
 
     elif opt_ == 'predict_multitask':
         logger.error('multi_predict is not implemented yet.')
@@ -1744,7 +1744,7 @@ def execute_model_training(config_json_path):
 
     elif opt_ == 'tuning_multitask':
         cf = cf['optuna']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1765,7 +1765,7 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
 
     elif opt_ == 'finetune_multitask':
         logger.error('multi_finetune is not implemented yet.')
@@ -1773,7 +1773,7 @@ def execute_model_training(config_json_path):
 
     elif opt_ == 'train_multichannel':
         cf = cf['train']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1789,15 +1789,15 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
 
     elif opt_ == 'tuning_multichannel':
         cf = cf['optuna']
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
-        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_json_path))
+        model_folder_json = os.path.join(cf['model_folder'], os.path.basename(config_path))
         if os.path.exists(model_folder_json) and not overwrite:
             logger.info(f'{model_folder_json} already exists. Skipped {opt_}.')
             return
@@ -1815,7 +1815,7 @@ def execute_model_training(config_json_path):
             log_scale=cf['log_scale'],
             time_agg=cf['time_agg']
         )
-        copy_json(config_json_path, cf['model_folder'])
+        copy_json(config_path, cf['model_folder'])
     return
 
 

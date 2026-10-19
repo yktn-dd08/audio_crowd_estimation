@@ -15,7 +15,7 @@ DEFAULT_PARAM = {
         'lr': 1e-05,
         'weight_decay': 0.0
     },
-    'Transformer': {
+    'Conv1dTransformer': {
         'kernel_size': 1,
         'dilation_size': 1,
         'pool_size': 1,
@@ -70,17 +70,22 @@ def create_training_json(output_json, input_glob_list, valid_glob_list, model_fo
 
     """
     dev = model_param.get('device', None)
+    target = model_param['target']
+    batch_size = model_param.get('batch_size', 64)
+    epoch = model_param.get('epoch', 200)
+    log_scale = model_param.get('log_scale', True)
+    time_agg = model_param.get('time_agg', True)
     if model_name not in DEFAULT_PARAM:
         raise ValueError(f'Model name "{model_name}" is not supported. Supported models: {list(DEFAULT_PARAM.keys())}')
-    model_param = DEFAULT_PARAM[model_name]
     tf_param = {
         'time_sec': model_param['time_sec'],
         'frame_num': model_param['frame_num'],
         'freq_num': model_param['freq_num'],
         'out_features': len(model_param['target'])
     }
+    def_param = DEFAULT_PARAM[model_name]
     # Merge default parameters with provided parameters
-    merged_param = {**model_param, **model_param['model_param'], **tf_param}
+    merged_param = {**def_param, **model_param.get('model_param', {}), **tf_param}
     input_folder_list = []
     for igl in input_glob_list:
         input_folder_list.extend(glob.glob(igl))
@@ -96,12 +101,12 @@ def create_training_json(output_json, input_glob_list, valid_glob_list, model_fo
             'valid_folder_list': valid_folder_list,
             'model_folder': model_folder,
             'model_name': model_name,
-            'target': model_param['target'],
-            'batch_size': model_param.get('batch_size', 64),
+            'target': target,
+            'batch_size': batch_size,
             'model_param': merged_param,
-            'epoch': model_param.get('epoch', 200),
-            'log_scale': model_param.get('log_scale', True),
-            'time_agg': model_param.get('time_agg', True)
+            'epoch': epoch,
+            'log_scale': log_scale,
+            'time_agg': time_agg
         }
     }
     output_folder = os.path.dirname(output_json)
