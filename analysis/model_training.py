@@ -1015,6 +1015,42 @@ def load_model_setting(model_name, model_param, target_num, finetune=None):
     return model, optimizer, criterion
 
 
+def fit_least_square_model(model, train_loader):
+    """学習データのみから切片付き最小二乗解をCPU・倍精度で求める。
+
+    log_scaleによる目的変数の変換はデータ読み込み側で適用済み。
+    model.logは線形層の後にlogを適用する別設定で、線形最小二乗の対象外。
+    """
+    if model.log:
+        raise ValueError('LeastSquareModel with log=True is not a linear least-squares model.')
+    features, targets = [], []
+    with torch.no_grad():
+        for x, y in train_loader:
+            # LeastSquareModel.forwardと同じ特徴量変換を適用する。
+            if model.power:
+                x = torch.exp(x)
+            x = x.mean(axis=[1, 2]).unsqueeze(1)
+            if model.power:
+                x = torch.log(x)
+            # MPSはfloat64非対応。デバイス移動を完了してから倍精度にする。
+            features.append(x.cpu().to(dtype=torch.float64))
+            targets.append(y.cpu().to(dtype=torch.float64))
+        if not features:
+            raise ValueError('LeastSquareModel requires non-empty training data.')
+        features = torch.cat(features)
+        targets = torch.cat(targets)
+        if not torch.isfinite(features).all() or not torch.isfinite(targets).all():
+            raise ValueError('LeastSquareModel requires finite features and targets.')
+        design = torch.cat([features, torch.ones_like(features)], dim=1)
+        # SVDにより、特徴量が一定などのランク落ちにも対応する。
+        solution = torch.linalg.lstsq(design, targets, driver='gelsd').solution
+        # 戻す際もCPU上でモデルのdtypeへ変換してからデバイスへ転送する。
+        model.linear.weight.copy_(solution[:1].T.to(dtype=model.linear.weight.dtype)
+                                  .to(device=model.linear.weight.device))
+        model.linear.bias.copy_(solution[1].to(dtype=model.linear.bias.dtype)
+                                .to(device=model.linear.bias.device))
+
+
 def audio_crowd_training(input_folder_list, valid_folder_list,
                          model_folder, model_name, model_param, target, epoch, dev=None,
                          log_scale=True, time_agg=False, batch_size=64):
@@ -1036,19 +1072,39 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
 
-    model, optimizer, criterion = load_model_setting(model_name, model_param, len(target))
-    model = model.to(device)
+    if model_name == 'LeastSquareModel':
+        params = dict(model_param)
+        params.setdefault('out_features', len(target))
+        model = audio_crowd_model(model_name, params).to(device)
+        logger.info('Fit LeastSquareModel by ordinary least squares; '
+                    'epoch, lr, weight_decay and criterion settings are not used.')
+        fit_least_square_model(model, train_dataloader)
+        criterion = nn.MSELoss()
+        train_loss = [model_test(model, train_dataloader, criterion, 0)]
+        test_loss = [model_test(model, test_dataloader, criterion, 0)]
+    else:
+        model, optimizer, criterion = load_model_setting(model_name, model_param, len(target))
+        model = model.to(device)
 
-    train_loss, test_loss = [], []
-    for ep in range(epoch):
-        tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep)
-        ts_loss_tmp = model_test(model, test_dataloader, criterion, ep)
-        train_loss.append(tr_loss_tmp)
-        test_loss.append(ts_loss_tmp)
+        train_loss, test_loss = [], []
+        for ep in range(epoch):
+            tr_loss_tmp = model_train(model, train_dataloader, criterion, optimizer, ep)
+            ts_loss_tmp = model_test(model, test_dataloader, criterion, ep)
+            train_loss.append(tr_loss_tmp)
+            test_loss.append(ts_loss_tmp)
 
     if not os.path.exists(model_folder):
         os.makedirs(model_folder, exist_ok=True)
-    view_loss(train_loss, test_loss, f'{model_folder}/loss.png')
+    if model_name == 'LeastSquareModel':
+        # 反復学習ではないため、学習曲線の代わりに解のMSEを表示する。
+        fig, ax = plt.subplots()
+        ax.bar(['TRAIN', 'TEST'], [train_loss[0], test_loss[0]])
+        ax.set_ylabel('MSE (model output scale)')
+        ax.set_title('Ordinary least squares')
+        fig.savefig(f'{model_folder}/loss.png')
+        plt.close(fig)
+    else:
+        view_loss(train_loss, test_loss, f'{model_folder}/loss.png')
     torch.save(model.state_dict(), f'{model_folder}/{model_name}_model.pt')
 
     target_np, output_np = model_predict(model, train_dataloader)
