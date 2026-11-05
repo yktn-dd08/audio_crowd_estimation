@@ -38,6 +38,7 @@ MODEL_LIST = [
     'ASTRegressor',
     'Conv1dTransformer',
     'LeastSquareModel',
+    'LeastSquareModel2',
     'MultiChannelSimpleCNN'
 ]
 SAMPLER_LIST = ['random', 'tpe']
@@ -615,6 +616,7 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                     channel_num=1,
                     time_sec=model_param['time_sec'],
                     time_agg=time_agg,
+                    log_scale=log_scale,
                     model_param=model_param
                 )
                 valid_x_list.append(tmp_x)
@@ -630,7 +632,8 @@ def load_dataset(input_folder_list, valid_folder_list, model_name, model_param, 
                     channel_num=1,
                     tasks=tasks,
                     time_sec=model_param['time_sec'],
-                    time_agg=time_agg
+                    time_agg=time_agg,
+                    log_scale=log_scale
                 )
                 valid_x_list.append(tmp_x)
                 valid_y_list.append(tmp_y)
@@ -1026,12 +1029,8 @@ def fit_least_square_model(model, train_loader):
     features, targets = [], []
     with torch.no_grad():
         for x, y in train_loader:
-            # LeastSquareModel.forwardと同じ特徴量変換を適用する。
-            if model.power:
-                x = torch.exp(x)
-            x = x.mean(axis=[1, 2]).unsqueeze(1)
-            if model.power:
-                x = torch.log(x)
+            # 学習時・推論時で同じ特徴量変換を使う。
+            x = model.extract_features(x)
             # MPSはfloat64非対応。デバイス移動を完了してから倍精度にする。
             features.append(x.cpu().to(dtype=torch.float64))
             targets.append(y.cpu().to(dtype=torch.float64))
@@ -1041,13 +1040,13 @@ def fit_least_square_model(model, train_loader):
         targets = torch.cat(targets)
         if not torch.isfinite(features).all() or not torch.isfinite(targets).all():
             raise ValueError('LeastSquareModel requires finite features and targets.')
-        design = torch.cat([features, torch.ones_like(features)], dim=1)
+        design = torch.cat([features, torch.ones_like(features[:, :1])], dim=1)
         # SVDにより、特徴量が一定などのランク落ちにも対応する。
         solution = torch.linalg.lstsq(design, targets, driver='gelsd').solution
         # 戻す際もCPU上でモデルのdtypeへ変換してからデバイスへ転送する。
-        model.linear.weight.copy_(solution[:1].T.to(dtype=model.linear.weight.dtype)
+        model.linear.weight.copy_(solution[:-1].T.to(dtype=model.linear.weight.dtype)
                                   .to(device=model.linear.weight.device))
-        model.linear.bias.copy_(solution[1].to(dtype=model.linear.bias.dtype)
+        model.linear.bias.copy_(solution[-1].to(dtype=model.linear.bias.dtype)
                                 .to(device=model.linear.bias.device))
 
 
@@ -1072,11 +1071,11 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
 
-    if model_name == 'LeastSquareModel':
+    if model_name in ('LeastSquareModel', 'LeastSquareModel2'):
         params = dict(model_param)
         params.setdefault('out_features', len(target))
         model = audio_crowd_model(model_name, params).to(device)
-        logger.info('Fit LeastSquareModel by ordinary least squares; '
+        logger.info(f'Fit {model_name} by ordinary least squares; '
                     'epoch, lr, weight_decay and criterion settings are not used.')
         fit_least_square_model(model, train_dataloader)
         criterion = nn.MSELoss()
@@ -1095,7 +1094,7 @@ def audio_crowd_training(input_folder_list, valid_folder_list,
 
     if not os.path.exists(model_folder):
         os.makedirs(model_folder, exist_ok=True)
-    if model_name == 'LeastSquareModel':
+    if model_name in ('LeastSquareModel', 'LeastSquareModel2'):
         # 反復学習ではないため、学習曲線の代わりに解のMSEを表示する。
         fig, ax = plt.subplots()
         ax.bar(['TRAIN', 'TEST'], [train_loss[0], test_loss[0]])
