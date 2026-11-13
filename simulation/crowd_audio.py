@@ -84,6 +84,10 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
                                               x_idx_range=x_idx_range, y_idx_range=y_idx_range)
         signal_info['crowd_path'] = crowd_path
 
+    # save footstep info
+    crowd_sim.save_footstep_json(f'{output_folder}/footstep_info.json')
+    signal_info['footstep_info'] = f'{output_folder}/footstep_info.json'
+
     with open(f'{output_folder}/signal_info.json', 'w') as f:
         json.dump(signal_info, f, indent=4)
     return

@@ -253,26 +253,32 @@ class Crowd:
         df['geom'] = df['geom'].apply(lambda x: wkt.loads(x))
         start_time = df['start_time'].min()
 
-        crowd_list = [cls(path=dr['geom'],
-                          start_time=(dr['start_time']-start_time).total_seconds(),
-                          height=1.7 if 'height' not in df.columns else dr['height'],
-                          foot_step=1.7 * 0.35 if 'foot_step' not in df.columns else dr['foot_step'],
-                          name=str(dr['id']),
-                          foot_tag=None if 'foot_tag' not in df.columns else dr['foot_tag'])
-                      for _, dr in df.iterrows()]
+        crowd_list = [
+            cls(
+                path=dr['geom'],
+                start_time=(dr['start_time']-start_time).total_seconds(),
+                height=1.7 if 'height' not in df.columns else dr['height'],
+                foot_step=1.7 * 0.35 if 'foot_step' not in df.columns else dr['foot_step'],
+                time_step=1.0 if 'time_step' not in df.columns else dr['time_step'],
+                name=str(dr['id']),
+                foot_tag=None if 'foot_tag' not in df.columns else dr['foot_tag']
+            ) for _, dr in df.iterrows()
+        ]
 
         avg_velocity = sum([cl.path.length / cl.duration for cl in crowd_list]) / len(crowd_list)
         logger.info(f'[Statistical Information]: average_speed: {avg_velocity}, person_num: {len(crowd_list)}')
 
         return crowd_list
 
-    def __init__(self, path: LineString,
-                 start_time: int | float,
-                 height: float,
-                 foot_step: float,
-                 time_step: float = 1.0,
-                 name=None,
-                 foot_tag=None):
+    def __init__(
+            self, path: LineString,
+            start_time: int | float,
+            height: float,
+            foot_step: float,
+            time_step: float = 1.0,
+            name=None,
+            foot_tag=None
+    ):
         self.time_step = time_step
         self.path = path
         self.start_time = start_time
@@ -340,27 +346,14 @@ class Crowd:
             for line_index in range(len(dist_parts) - 1):
                 if sum(dist_parts[:line_index + 1]) <= dist < sum(dist_parts[:line_index + 2]):
                     dist_part = Point(pc[line_index]).distance(point) / dist_parts[line_index + 1]
-                    res.append({'t': line_index + dist_part + self.start_time, 'point': point, 'dist': dist})
+                    res.append(
+                        {
+                            't': (line_index + dist_part) * self.time_step + self.start_time,
+                            'point': point,
+                            'dist': dist
+                        }
+                    )
 
-                # if sum(dist_parts[:line_index + 1]) == dist:
-                #     res.append({'t': line_index, 'point': point, 'dist': dist})
-                # elif sum(dist_parts[:line_index + 1]) < dist:
-                #     if dist < sum(dist_parts[:line_index + 2]):
-                #         dist_part = Point(pc[line_index]).distance(point) / dist_parts[line_index + 1]
-                #         res.append({'t': line_index + dist_part, 'point': point, 'dist': dist})
-                #     else:
-                #         pass
-                # pass
-            # if sum(dist_parts[:line_index]) == dist:
-            #     res.append({'t': line_index, 'point': point})
-            # elif sum(dist_parts[:line_index]) > dist:
-            #     Exception('')
-            # else:
-            #     while sum(dist_parts[:line_index]) < dist < sum(dist_parts[:line_index + 1]):
-            #
-            #         pass
-            #
-            # res.append({'t': Crowd.__get_point_index_float(self.path, point), 'point': point})
             # TODO randomize foot_step
             dist += self.foot_step
 
@@ -368,6 +361,11 @@ class Crowd:
 
 
 class FootstepSound:
+    """
+    足音を扱うためのクラス
+    foot_tagは足音を管理するタグになっており、一人分の足音一歩一歩の集合に対応
+    wav_tagは一歩の足音を管理するタグに対応
+    """
     FOLDER = './data/ambient_sound/footstep'
 
     def __init__(self, sampling_rate=16000):
@@ -637,8 +635,11 @@ class CrowdSim:
                 except Exception as e:
                     logger.warning(f'Simulation failed for group {sim_param["group"]} with {room.n_sources} sources: {type(e).__name__}: {str(e)}')
                     simulated_sound = np.zeros([room.n_mics, 1])
-            result = {'delay': int(room.fs * sim_param['offset']), 'signal': simulated_sound,
-                      'group': sim_param['group']}
+            result = {
+                'delay': int(room.fs * sim_param['offset']),
+                'signal': simulated_sound,
+                'group': sim_param['group']
+            }
             return result
 
         res_list = Parallel(n_jobs=-1)(delayed(_sim_group)(i) for i in tqdm(range(len(sim_param_group)),
@@ -671,13 +672,6 @@ class CrowdSim:
         logger.info(f'multi_process - {multi_process}')
         if multi_process:
             return self.multi_process_simulation(duration=time_unit)
-            # people_sound = Parallel(n_jobs=-1)(delayed(self.person_sim)(i) for i in tqdm(range(len(self.crowd_list))))
-            # ch = people_sound[0].shape[0]
-            # audio_size = max([ps.shape[1] for ps in people_sound])
-            # sim_result = np.zeros((ch, audio_size))
-            # for ps in people_sound:
-            #     sim_result[:, :ps.shape[1]] += ps
-            # return sim_result
         else:
             people_sound = [self.person_sim(i) for i in tqdm(range(len(self.crowd_list)))]
 
@@ -700,8 +694,37 @@ class CrowdSim:
         sigma_n = sigma_s * (10 ** (-snr / 20))
         return sigma_n
 
-    def save_footstep_shp(self, filename):
-        # TODO
+    def save_footstep_json(self, filename):
+        """
+        self.person_sound_info = [
+            {
+                'id': i,
+                'foot_tag': foot_tags[i],
+                'time_series': [
+                    {
+                        't': foot['t'],
+                        'x': foot['point'].x,
+                        'y': foot['point'].y,
+                        'z': 0.0,
+                        'sound_index': self.foot_sound.get_rnd_sound_index(foot_tags[i])
+                    }
+                    for foot in self.footstep[i]
+                ]
+            }
+            for i in range(len(self.crowd_list))
+        ]
+        """
+        footstep_json = {
+            str(psi['id']): {
+                'foot_tag': psi['foot_tag'],
+                'time_series': psi['time_series']
+            }
+            for psi in self.person_sound_info
+        }
+        folder_name = os.path.dirname(filename)
+        os.makedirs(folder_name, exist_ok=True)
+        with open(filename, 'w') as fp:
+            json.dump(footstep_json, fp, indent=4)
         return
 
     def plot(self, filename):
@@ -2377,6 +2400,7 @@ class SocialForceSimulation:
             {
                 'id': pid,
                 'start_time': min(grp_df['datetime']),
+                'time_step': self.dt,
                 'geom': LineString(grp_df.sort_values(by='datetime')[['x', 'y']].values),
                 'goal': Point(grp_df[['goal_x', 'goal_y']].iloc[0]) if 'goal_x' in grp_df.columns and 'goal_y' in grp_df.columns else None
             }
