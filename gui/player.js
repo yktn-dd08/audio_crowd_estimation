@@ -415,6 +415,7 @@ let lastFrame=0;function tick(ms){if(playing&&ms-lastFrame>=30){draw();lastFrame
 async function init(){
   try{
     const payload=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob($('payload').textContent.trim()),c=>c.charCodeAt(0))));
+    if(payload.serverFiles)$("localFiles").style.display="none";
     if(payload.csv)loadCSV(payload.csv,payload.csvName);
     if(payload.audio)await loadAudio(Uint8Array.from(atob(payload.audio),c=>c.charCodeAt(0)).buffer,payload.audioName);
     draw();

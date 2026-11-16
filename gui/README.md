@@ -17,12 +17,43 @@ player = SyncPlayer(
 player  # セルの最後に置くと表示
 ```
 
-あるいは、画面上のファイル選択から読み込めます。
+あるいは、画面上のファイル選択から手元PCのファイルを読み込めます。サーバー上のファイルを選ぶ場合は、下記のサーバー用モードを使ってください。
 
 ```python
 from gui import show_sync_player
 show_sync_player();
 ```
+
+### SSH接続先・サーバー上のファイルをGUIで選ぶ
+
+Notebookのカーネルが動くサーバーのフォルダをたどれる、専用の選択パネルを使えます。初回のみNotebookのセルで依存をインストールしてください。
+
+```python
+%pip install "ipywidgets>=8,<9"
+```
+
+必要に応じてカーネルを再起動してから実行します。
+
+```python
+from gui import show_sync_player
+
+browser = show_sync_player(server_files=True);
+# 開始フォルダを指定する場合:
+# browser = show_sync_player(server_files=True, start_dir="/data/datasets");
+```
+
+1. 「サーバーの音声ファイルを選択」を開き、フォルダを選んで「フォルダを開く / 選択」を押して移動します。
+2. 音声ファイルを選択し、同じボタンで確定します。
+3. 「サーバーの軌跡CSVを選択」でCSVも確定します。音声とCSVは別のフォルダでも構いません。
+4. 「選択した2ファイルを読み込む」を押すと、その下に同期プレイヤーを表示します。
+
+初期フォルダはカーネルの作業フォルダです。「上のフォルダ」で上位へ移動でき、フォルダ欄にパスを入力して「移動」もできます。アクセスできるのはカーネルの実行ユーザーが読み取れるファイルです。追加のHTTPサーバーやSSH転送ポート、手元PCへの事前コピーは不要です。選択したデータはJupyterの接続経由でプレイヤーに渡します。
+
+このモードは生きたNotebookカーネルが必要です。単独HTMLからサーバーのフォルダを選択することはできません。通常モードの「手元の音声」「手元の軌跡CSV」は従来通りブラウザ側のPCを参照します。ファイルを選び直して読み込むとプレイヤーは作り直され、再生位置や表示設定は初期化されます。
+
+読み込んだプレイヤーは `browser.player` に保存され、`browser.player.save("sync_player.html")` でHTML出力できます。
+
+ウィジェットが文字列のまま表示される場合はJupyter側のウィジェット機能を確認してください。JupyterLabとカーネルが別環境なら、カーネル側に `ipywidgets`、JupyterLab側に `jupyterlab_widgets` が必要です（[公式インストール手順](https://ipywidgets.readthedocs.io/en/stable/user_install.html)）。
 
 [example.ipynb](example.ipynb) に添付サンプルを使う例があります。別の場所から起動する場合は、リポジトリのルートを `sys.path` に追加してください。
 

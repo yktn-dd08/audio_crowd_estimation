@@ -62,6 +62,21 @@ class SyncPlayer:
         return self
 
 
-def show_sync_player(audio_path=None, trajectory_path=None, *, height=900):
-    """Create and display a player. Use a trailing semicolon in a notebook."""
+def show_sync_player(
+    audio_path=None, trajectory_path=None, *, height=900,
+    server_files=False, start_dir=None,
+):
+    """Display a player, optionally with a kernel-side file browser.
+
+    Set server_files=True in remote notebooks to browse the server filesystem.
+    This mode requires ipywidgets; standalone HTML keeps browser-local inputs.
+    """
+    if server_files:
+        from .server_picker import ServerFilePlayer
+
+        return ServerFilePlayer(
+            audio_path, trajectory_path, height=height, start_dir=start_dir
+        ).display()
+    if start_dir is not None:
+        raise ValueError("start_dir requires server_files=True")
     return SyncPlayer(audio_path, trajectory_path, height=height).display()

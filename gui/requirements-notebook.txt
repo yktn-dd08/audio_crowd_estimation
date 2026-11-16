@@ -1,0 +1,2 @@
+# Optional: browse files on the machine running the Jupyter kernel.
+ipywidgets>=8,<9

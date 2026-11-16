@@ -6,7 +6,7 @@
 .panel canvas.colorbar{height:54px;flex:0 0 54px;cursor:default;touch-action:auto}
 </style></head><body>
 <h1>Audio × Trajectory <small style="font-size:13px;color:#9cb5d2">同期プレイヤー</small></h1>
-<div class="row"><label>音声 <input id="audioFile" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a"></label><label>軌跡CSV <input id="csvFile" type="file" accept=".csv,text/csv"></label></div>
+<div id="localFiles" class="row"><label>手元の音声 <input id="audioFile" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a"></label><label>手元の軌跡CSV <input id="csvFile" type="file" accept=".csv,text/csv"></label></div>
 <div id="names" class="hint"></div><div id="audioDetails" class="hint"></div>
 <div class="row"><button id="play" disabled>▶ 再生</button><button id="stop" disabled>■ 先頭へ</button><input id="seek" aria-label="再生位置" type="range" min="0" max="1" step="0.001" value="0" disabled><span id="time">0.000 / 0.000 s</span><label>速度 <select id="rate"><option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select></label><label>音量 <input id="volume" aria-label="音量" type="range" min="0" max="1" step="0.01" value="0.8" style="width:85px"></label><label>Ch <select id="channel" disabled></select></label></div>
 <details><summary>CSVの列・時刻合わせ</summary><div id="mapping" class="row"></div><div class="row"><label>軌跡の開始を遅らせる (秒) <input id="offset" type="number" step="0.1" value="0"></label><label>補間する最大間隔 (秒) <input id="gap" type="number" step="0.1" min="0.001" value="0.5"></label><button id="apply">設定を適用</button></div><div class="hint">音声時刻 = CSV時刻 + オフセット。時刻は秒または日時。欠測区間・別segment間は補間しません。X/Y列を変更してXZ・YZ平面も表示できます。</div></details>
