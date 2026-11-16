@@ -14,6 +14,7 @@ def audio_crowd_simulation(crowd_csv, room_shp, output_folder, mic_shp=None, snr
     crowd_list = Crowd.csv_to_crowd_list(crowd_csv)
     st_time, ed_time = min([c.start_time for c in crowd_list]), max([c.start_time for c in crowd_list])
     signal_info['simulation_time'] = [st_time, ed_time]
+    signal_info['crowd_path'] = crowd_csv
     logger.info(f'simulation time: {st_time} - {ed_time}')
 
     # print('Reading Simulation room shapefile.')

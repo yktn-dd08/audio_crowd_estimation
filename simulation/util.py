@@ -284,17 +284,23 @@ class Crowd:
         self.start_time = start_time
         self.height = height
         self.foot_step = foot_step
-        self.duration = len(path.coords) * time_step
+        self.duration = max(len(path.coords) - 1, 0) * time_step
         self.name = name
         self.foot_tag = foot_tag
 
     def time_interpolate(self, t: float | int):
-        if self.start_time > t or t >= self.start_time + self.duration:
+        """Return the interpolated position, including both trajectory endpoints."""
+        coords = self.path.coords
+        end_time = self.start_time + self.duration
+        if not len(coords) or t < self.start_time or t > end_time:
             return None
+        if t == end_time:
+            return Point(coords[-1])
         t_step_float = (t - self.start_time) / self.time_step
-        t_step_int = int(t_step_float)
-        p1 = self.path.coords[t_step_int]
-        p2 = self.path.coords[t_step_int + 1]
+        # Rounding near the endpoint can produce the last coordinate index.
+        t_step_int = min(int(t_step_float), len(coords) - 2)
+        p1 = coords[t_step_int]
+        p2 = coords[t_step_int + 1]
         line = LineString([p1, p2])
         return line.interpolate(distance=t_step_float - t_step_int, normalized=True)
 
@@ -803,28 +809,73 @@ class CrowdSim:
 
     def crowd_density_from_each_mic(self, mic_index: int, csv_name: str, distance_list: list, time_step=1.0,
                                     verbose=True):
-        mic_geom = Point(self.mic_info[mic_index][0:2])
-        max_time_index = int(max([c.start_time + c.duration for c in self.crowd_list]) / time_step) + 1
+        """Integrate person-seconds in each [t, t + time_step) output bin.
 
-        out_df = pd.DataFrame(np.zeros((max_time_index, len(distance_list) + 1)),
-                              columns=['count'] + [f'distance_{d}' for d in distance_list],
-                              index=[t for t in range(max_time_index)])
+        Positions move linearly between trajectory samples. ``count`` includes
+        all observed time; ``distance_*`` includes only time strictly inside
+        the corresponding microphone radius. No time is extrapolated beyond
+        the last coordinate, and values are not divided by the output bin size.
+        """
+        if not np.isfinite(time_step) or time_step <= 0:
+            raise ValueError('time_step must be finite and greater than 0.')
+        radii = np.asarray(distance_list, dtype=float)
+        if np.any(~np.isfinite(radii)) or np.any(radii < 0):
+            raise ValueError('Distances must be finite and non-negative.')
+        for crowd in self.crowd_list:
+            if not np.isfinite(crowd.time_step) or crowd.time_step <= 0:
+                raise ValueError('Trajectory time_step must be finite and greater than 0.')
+            if not np.isfinite(crowd.start_time) or crowd.start_time < 0:
+                raise ValueError('Trajectory start_time must be finite and non-negative.')
+
+        mic_xy = np.asarray(self.mic_info[mic_index][:2], dtype=float)
+        end_time = max((c.start_time + (len(c.path.coords) - 1) * c.time_step
+                        for c in self.crowd_list), default=0.0)
+        max_time_index = math.ceil(end_time / time_step)
+        totals = np.zeros((max_time_index, len(radii) + 1))
+
+        def add_interval(start, end, column):
+            # Split an observed interval across output bins without counting
+            # the same person multiple times for finer trajectory sampling.
+            first = max(0, math.floor(start / time_step))
+            stop = min(max_time_index, math.ceil(end / time_step))
+            for index in range(first, stop):
+                overlap = min(end, (index + 1) * time_step) - max(start, index * time_step)
+                totals[index, column] += max(0.0, overlap)
+
+        for crowd in tqdm(self.crowd_list, desc='[Person-seconds]', disable=not verbose):
+            coords = np.asarray(crowd.path.coords, dtype=float)[:, :2]
+            for index, (p0, p1) in enumerate(zip(coords[:-1], coords[1:])):
+                start = crowd.start_time + index * crowd.time_step
+                end = crowd.start_time + (index + 1) * crowd.time_step
+                add_interval(start, end, 0)
+                offset = p0 - mic_xy
+                motion = p1 - p0
+                a = float(np.dot(motion, motion))
+                b = float(np.dot(offset, motion))
+                for column, radius in enumerate(radii, start=1):
+                    c = float(np.dot(offset, offset) - radius * radius)
+                    if a == 0.0:
+                        if c < 0.0:
+                            add_interval(start, end, column)
+                        continue
+                    # Solve |offset + u * motion|^2 < radius^2 for u in [0, 1].
+                    discriminant = b * b - a * c
+                    if discriminant <= 0.0:
+                        continue
+                    root = math.sqrt(discriminant)
+                    enter = max(0.0, (-b - root) / a)
+                    leave = min(1.0, (-b + root) / a)
+                    if enter < leave:
+                        add_interval(start + enter * crowd.time_step,
+                                     start + leave * crowd.time_step, column)
+
+        out_df = pd.DataFrame(totals, columns=['count'] + [f'distance_{d}' for d in distance_list])
         out_df.index.name = 'time_index'
-
-        for i in tqdm(range(len(self.crowd_list)), desc='[Crowd Counting]', disable=not verbose):
-            trj_df = self.get_person_moving_features(i)
-            trj_df['time_index'] = (trj_df['t'] / time_step).astype(int)
-            trj_df['distance'] = trj_df['geometry'].apply(lambda x: Point(x.coords[0]).distance(mic_geom))
-            trj_df['count'] = 1.0
-            for d in distance_list:
-                trj_df[f'distance_{d}'] = trj_df['distance'].apply(lambda x: 1 if x < d else 0)
-            trj_df = trj_df[['time_index', 'count'] + [f'distance_{d}' for d in distance_list]].set_index('time_index')
-            out_df.loc[trj_df.index] += trj_df.loc[trj_df.index]
-
-        out_df = out_df.astype(int).reset_index()
+        out_df = out_df.reset_index()
         out_df['t'] = out_df['time_index'] * time_step
         folder = os.path.dirname(csv_name)
-        os.makedirs(folder, exist_ok=True)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
         out_df.to_csv(csv_name, index=False)
         return
 

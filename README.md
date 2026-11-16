@@ -59,3 +59,5 @@ python -m simulation.util -c ./workspace/gis/test_f1.csv -s ./workspace/gis/room
 ```commandline
 python -m analysis.model_training -opt cv -i ./workspace/sim/f1 -o ./workspace/sim/f1/model2 -d sim -e 10
 ```
+### 音声と軌跡の同期再生GUI
+Jupyter Notebookから使える波形・スペクトログラム・軌跡プレイヤーは [gui/README.md](gui/README.md) を参照してください。使用例: [gui/example.ipynb](gui/example.ipynb)。
